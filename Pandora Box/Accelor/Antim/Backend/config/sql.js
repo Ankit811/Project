@@ -26,6 +26,26 @@ const connectSQL = async () => {
       password: '****', // Mask password in logs
     });
     const pool = await connect(sqlConfig);
+    
+    // Add pool monitoring
+    pool.on('error', (err) => {
+      console.error('SQL Pool error:', {
+        message: err.message,
+        code: err.code,
+        state: err.state,
+        severity: err.severity
+      });
+    });
+
+    pool.on('connect', () => {
+      console.log('SQL Pool stats:', {
+        activeRequests: pool.activeRequests,
+        pendingRequests: pool.pendingRequests,
+        poolSize: pool.poolSize,
+        waitingClients: pool.waitingClients
+      });
+    });
+
     console.log('SQL Server connected to', sqlConfig.server, 'database', sqlConfig.database);
     return pool;
   } catch (err) {
