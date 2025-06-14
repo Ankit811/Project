@@ -34,7 +34,7 @@ router.get('/', auth, async (req, res) => {
       filter.logDate = { $gte: fromDate, $lte: toDate };
     }
 
-    const attendance = await Attendance.find(filter).lean();
+    const attendance = await Attendance.find(filter).sort({ logDate: -1, employeeId: 1}).lean();
     console.log(`Fetched ${attendance.length} attendance records for filter:`, filter);
     res.json(attendance);
   } catch (err) {

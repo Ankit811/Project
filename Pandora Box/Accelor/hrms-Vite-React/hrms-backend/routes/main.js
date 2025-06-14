@@ -12,7 +12,7 @@ import otRoutes from './ot.js';
 const registerRoutes = (app) => {
   app.use('/api/auth', authRoutes);
   app.use('/api/dashboard', dashboardRoutes);
-  app.use('/api/employee', employeeRoutes);
+  app.use('/api/employees', employeeRoutes);
   app.use('/api/departments', departmentRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/leaves', leaveRoutes);

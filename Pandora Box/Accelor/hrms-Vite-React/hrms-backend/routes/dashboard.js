@@ -7,6 +7,7 @@ import OTClaim from '../models/OTClaim.js';
 import OD from '../models/OD.js';
 import auth from '../middleware/auth.js';
 import role from '../middleware/role.js';
+import { buildAttendanceData } from '../utils/attendanceUtils.js';
 const router = Router();
 
 // Get dashboard statistics
@@ -215,34 +216,10 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const attendanceRecords = await Attendance.find(attendanceQuery);
 
-    let attendanceData = [];
-    if (attendanceView === 'daily') {
-      const date = new Date(fromDate);
-      const count = attendanceRecords.filter(
-        a => new Date(a.logDate).toDateString() === date.toDateString()
-      ).length;
-      attendanceData = [{ name: date.toLocaleDateString(), count }];
-    } else if (attendanceView === 'monthly') {
-      attendanceData = Array.from({ length: endOfMonth.getDate() }, (_, i) => {
-        const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
-        const count = attendanceRecords.filter(
-          a => new Date(a.logDate).toDateString() === date.toDateString()
-        ).length;
-        return { name: `${i + 1}`, count };
-      });
-    } else {
-      attendanceData = Array.from({ length: 12 }, (_, i) => {
-        const month = new Date(today.getFullYear(), i, 1);
-        const count = attendanceRecords.filter(
-          a => new Date(a.logDate).getMonth() === i &&
-              new Date(a.logDate).getFullYear() === today.getFullYear()
-        ).length;
-        return { name: month.toLocaleString('default', { month: 'short' }), count };
-      });
-    }
+    const attendanceData = buildAttendanceData(attendanceRecords, attendanceView, new Date(fromDate), new Date(toDate));
 
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType department compensatoryAvailable')
+      .select('employeeType department compensatoryAvailable restrictedHolidays')
       .populate('department');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -338,6 +315,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       'status.admin': 'Acknowledged', // Fixed to match Leave schema
       'status.ceo': 'Approved',
     };
+    const restrictedHolidays = employee.restrictedHolidays;
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
     const unpaidLeavesTaken = unpaidLeavesRecords.reduce((total, leave) => {
       if (leave.halfDay && leave.halfDay.date) {
@@ -449,16 +427,18 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
-
+    
     const stats = {
       attendanceData,
       leaveRecords,
+      leaveDaysTaken,
       unpaidLeavesTaken,
       overtimeHours,
       otClaimRecords,
       unclaimedOTRecords,
       claimedOTRecords,
       compensatoryLeaveEntries,
+      restrictedHolidays,
       odRecords,
     };
 
