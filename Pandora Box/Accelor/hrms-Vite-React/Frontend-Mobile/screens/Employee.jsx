@@ -46,6 +46,8 @@ const EmployeeScreen = () => {
               label="Logout"
               onPress={handleLogout}
               labelStyle={styles.logoutLabel}
+              paddingBottom={20}
+              paddingLeft={40}
             />
           </View>
         </View>
@@ -71,7 +73,7 @@ const EmployeeScreen = () => {
             onPress={() => navigation.openDrawer()}
             style={styles.hamburgerButton}
           >
-            <Ionicons name="menu" size={24} color="#6b21a8" />
+            <Ionicons name="menu" size={24} color="white" />
           </TouchableOpacity>
         ),
       })}
@@ -81,6 +83,9 @@ const EmployeeScreen = () => {
         component={EmployeeDashboard}
         options={{
           // title: 'Employee Portal',
+          headerTitle: 'Employee Dashboard',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="speedometer" size={20} color={color} />
           )
@@ -90,6 +95,9 @@ const EmployeeScreen = () => {
         name="My Profile"
         component={Profile}
         options={{
+          headerTitle: 'My Profile',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="person" size={20} color={color} />
           )
@@ -99,6 +107,9 @@ const EmployeeScreen = () => {
         name="Leaves"
         component={LeaveForm}
         options={{
+          headerTitle: 'Leaves',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="calendar" size={20} color={color} />
           )
@@ -108,6 +119,9 @@ const EmployeeScreen = () => {
         name="OD"
         component={ODForm}
         options={{
+          headerTitle: 'OD',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="document" size={20} color={color} />
           )
@@ -117,6 +131,9 @@ const EmployeeScreen = () => {
         name="Attendance"
         component={Attendance}
         options={{
+          headerTitle: 'Attendance',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="time" size={20} color={color} />
           )

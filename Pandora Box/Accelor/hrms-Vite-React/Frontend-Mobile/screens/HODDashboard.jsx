@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList, DrawerItem } from '@react-navigation/drawer';
+import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import HODHome from '../components/HODHome.jsx';
 import Profile from '../components/Profile.jsx';
@@ -12,10 +13,13 @@ import ODRequests from '../components/ODRequests.jsx';
 import EmployeeDashboard from '../components/EmployeeDashboard.jsx';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
+import EmployeeList from '../components/EmployeeList.jsx';
+import HODEmployeeProfile from '../components/HODEmployeeProfile.jsx';
 
 // import Reports from '../components/Reports';
 
 const Drawer = createDrawerNavigator();
+const Stack = createStackNavigator();
 
 const HODDashboard = () => {
   const navigation = useNavigation();
@@ -36,7 +40,7 @@ const HODDashboard = () => {
     }
   }
 
-  return (
+  const MainDrawer = () => (
     <Drawer.Navigator
       drawerContent={(props) => (
         <View style={{ flex: 1 }}>
@@ -76,7 +80,7 @@ const HODDashboard = () => {
             onPress={() => navigation.openDrawer()}
             style={styles.hamburgerButton}
           >
-            <Ionicons name="menu" size={24} color="#6b21a8" />
+            <Ionicons name="menu" size={24} color="white" />
           </TouchableOpacity>
         ),
       })}
@@ -86,6 +90,9 @@ const HODDashboard = () => {
         component={EmployeeDashboard}
         options={{
           // title: 'Employee Portal',
+          headerTitle: 'Employee Dashboard',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="speedometer" size={20} color={color} />
           )
@@ -94,10 +101,14 @@ const HODDashboard = () => {
 
 
 
+
       <Drawer.Screen
         name="My Profile"
         component={Profile}
         options={{
+          headerTitle: 'My Profile',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="person" size={20} color={color} />
           )
@@ -107,6 +118,9 @@ const HODDashboard = () => {
         name="Leaves"
         component={LeaveForm}
         options={{
+          headerTitle: 'Leaves',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="calendar" size={20} color={color} />
           )
@@ -116,6 +130,9 @@ const HODDashboard = () => {
         name="OD"
         component={ODForm}
         options={{
+          headerTitle: 'OD',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="document" size={20} color={color} />
           )
@@ -125,6 +142,9 @@ const HODDashboard = () => {
         name="Attendance"
         component={Attendance}
         options={{
+          headerTitle: 'Attendance',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="time" size={20} color={color} />
           )
@@ -134,6 +154,9 @@ const HODDashboard = () => {
         name="Dashboard"
         component={HODHome}
         options={{
+          headerTitle: 'Dashboard',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           title: 'HOD Portal',
           drawerIcon: ({ color }) => (
             <Ionicons name="speedometer" size={20} color={color} />
@@ -144,6 +167,9 @@ const HODDashboard = () => {
         name="Leave Requests"
         component={LeaveRequests}
         options={{
+          headerTitle: 'Leave Requests',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="document-text" size={20} color={color} />
           )
@@ -153,6 +179,21 @@ const HODDashboard = () => {
         name="OD Requests"
         component={ODRequests}
         options={{
+          headerTitle: 'OD Requests',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
+          drawerIcon: ({ color }) => (
+            <Ionicons name="calendar" size={20} color={color} />
+          )
+        }}
+      />
+      <Drawer.Screen
+        name="Employee List"
+        component={EmployeeList}
+        options={{
+          headerTitle: 'Employee List',
+          headerStyle: { backgroundColor: '#6b21a8' },
+          headerTintColor: '#fff',
           drawerIcon: ({ color }) => (
             <Ionicons name="calendar" size={20} color={color} />
           )
@@ -161,6 +202,23 @@ const HODDashboard = () => {
 
 
     </Drawer.Navigator>
+  );
+
+  return (
+    <Stack.Navigator screenOptions={{
+      headerShown: false
+    }}>
+      <Stack.Screen name="HODDrawer" component={MainDrawer} />
+      <Stack.Screen
+        name="HODEmployeeProfile"
+        component={HODEmployeeProfile}
+        options={{
+          headerShown: true,
+          title: 'Employee Profile',
+          headerBackTitle: 'Back'
+        }}
+      />
+    </Stack.Navigator>
   );
 };
 

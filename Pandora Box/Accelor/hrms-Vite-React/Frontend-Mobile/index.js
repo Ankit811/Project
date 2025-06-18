@@ -5,7 +5,7 @@ import { ActivityIndicator, View, StyleSheet, Text, Button } from 'react-native'
 import { AuthProvider, AuthContext } from './context/AuthContext.jsx';
 import LoginScreen from './screens/LoginScreen.jsx';
 import EmployeeScreen from './screens/Employee.jsx';
-import HODDashboard from './screens/HODDashboard.jsx';
+import HODStack from './navigation/HODStack';
 
 const Stack = createNativeStackNavigator();
 
@@ -48,23 +48,20 @@ const AppContent = () => {
           user.loginType === 'HOD' ? (
             <Stack.Screen
               name="HOD"
-              component={HODDashboard}
-              options={{
-                headerShown: true,
-                headerTitle: 'HOD Dashboard',
+              component={HODStack}
+              options={{ headerShown: false,headerTitle: 'HOD Dashboard',
                 headerStyle: { backgroundColor: '#6b21a8' },
-                headerTintColor: '#fff'
-              }}
+                headerTintColor: '#fff' }}
             />
           ) : (
             <Stack.Screen
               name="Employee"
               component={EmployeeScreen}
               options={{
-                headerShown: true,
-                headerTitle: 'Employee Dashboard',
-                headerStyle: { backgroundColor: '#6b21a8' },
-                headerTintColor: '#fff'
+                headerShown: false,
+                  headerTitle: 'Employee Dashboard',
+                  headerStyle: { backgroundColor: '#6b21a8' },
+                  headerTintColor: '#fff'
               }}
             />
           )
