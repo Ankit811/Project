@@ -4,12 +4,14 @@ import Employee from '../models/Employee.js';
 import Leave from '../models/Leave.js';
 import OD from '../models/OD.js';
 import auth from '../middleware/auth.js';
+import Department from '../models/Department.js';
 import { utils, write } from 'xlsx';
 const router = Router();
 
 router.get('/', auth, async (req, res) => {
   try {
     let filter = {};
+    let departmentName = '';
 
     if (req.user.loginType === 'Employee') {
       filter = { employeeId: req.user.employeeId };
@@ -17,6 +19,8 @@ router.get('/', auth, async (req, res) => {
       const user = await Employee.findById(req.user.id).populate('department');
       const employees = await Employee.find({ department: user.department._id }).select('employeeId');
       filter = { employeeId: { $in: employees.map(e => e.employeeId) } };
+      departmentName = user.department ? user.department.name : '';
+
     }
 
     if (req.query.employeeId) {
@@ -33,10 +37,53 @@ router.get('/', auth, async (req, res) => {
       toDate.setHours(23, 59, 59, 999);
       filter.logDate = { $gte: fromDate, $lte: toDate };
     }
+    const status = req.query.status;
+    if (status && status !== 'all') {
+      filter.status = status;
+    } else if (status === 'all') {
+      // If status is 'all', don't filter by status
+      delete filter.status;
+    } else {
+      // Default status filter
+      filter.status = { $in: ['Present', 'Absent', 'Half Day'] };
+    }
 
-    const attendance = await Attendance.find(filter).sort({ logDate: -1, employeeId: 1}).lean();
-    console.log(`Fetched ${attendance.length} attendance records for filter:`, filter);
-    res.json(attendance);
+    
+    // Get attendance records
+    let attendance = await Attendance.find(filter)
+      .sort({ logDate: -1, employeeId: 1 })
+      .lean();
+    
+    // Get unique employee IDs from the attendance records
+    const employeeIds = [...new Set(attendance.map(a => a.employeeId))];
+    
+    // Get department info for these employees
+    const employees = await Employee.find({ employeeId: { $in: employeeIds } })
+      .select('employeeId department')
+      .populate('department', 'name')
+      .lean();
+    
+    // Create a map of employeeId to department name
+    const employeeDeptMap = employees.reduce((map, emp) => {
+      map[emp.employeeId] = emp.department?.name || 'Unknown';
+      return map;
+    }, {});
+    
+    // Add department name to each attendance record
+    attendance = attendance.map(record => ({
+      ...record,
+      departmentName: employeeDeptMap[record.employeeId] || 'Unknown'
+    }));
+    
+    // If departmentName filter was provided, filter the results
+    if (departmentName) {
+      attendance = attendance.filter(
+        record => record.departmentName.toLowerCase() === departmentName.toLowerCase()
+      );
+    }
+    
+    console.log(`Fetched ${attendance.length} attendance records`);
+    res.json({ attendance, departmentName });
   } catch (err) {
     console.error('Error fetching attendance:', err);
     res.status(500).json({ message: 'Server error', error: err.message });

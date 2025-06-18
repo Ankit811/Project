@@ -7,7 +7,8 @@ import {
     StyleSheet,
     ScrollView,
     Alert,
-    Platform
+    Platform,
+    RefreshControl,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Card, Modal, Portal, Button, Provider as PaperProvider } from 'react-native-paper';
@@ -34,17 +35,27 @@ function ODForm() {
     const [odRecords, setOdRecords] = useState([]);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     const fetchOdRecords = async () => {
         try {
             const response = await api.get('/od');
             const records = response.data.odRecords || [];
             setOdRecords(records);
+            return true;
         } catch (error) {
             console.error('Error fetching OD records:', error);
             Alert.alert('Error', 'Failed to fetch OD records');
             setOdRecords([]);
+            return false;
+        } finally {
+            setRefreshing(false);
         }
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchOdRecords();
     };
 
     useEffect(() => {
@@ -177,7 +188,17 @@ function ODForm() {
 
     return (
         <PaperProvider>
-            <ScrollView style={styles.container}>
+            <ScrollView 
+                style={styles.container}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={['#2563eb']}
+                        tintColor="#2563eb"
+                    />
+                }
+            >
                 <Text style={styles.pageTitle}>Apply for OD</Text>
                 <Card style={styles.card}>
                     <Card.Content>

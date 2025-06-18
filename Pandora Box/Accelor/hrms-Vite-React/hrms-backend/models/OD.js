@@ -17,7 +17,8 @@ const odSchema = new Schema({
     hod: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     admin: { type: String, enum: ['Pending', 'Acknowledged'], default: 'Pending' },
     ceo: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-  }
+  },
+  remarks: { type: String, default: 'N/A' },
 }, { timestamps: true });
 
 export default models.OD || model('OD', odSchema);

@@ -1,48 +1,118 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
-    ActivityIndicator,
-    TouchableOpacity,
     FlatList,
     TextInput,
-    Alert,
+    TouchableOpacity,
+    ActivityIndicator,
     Platform,
-    PermissionsAndroid,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button, Card } from 'react-native-paper';
 import { Button as RNButton } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-// import * as FileSystem from 'expo-file-system';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 
 function Attendance() {
     const { user } = useContext(AuthContext);
     const [attendance, setAttendance] = useState([]);
-        const [filters, setFilters] = useState({
+    const [departments, setDepartments] = useState([]);
+    const [departmentName, setDepartmentName] = useState('');
+    const [filters, setFilters] = useState({
         employeeId: '',
         departmentId: user?.department?._id || '',
         fromDate: new Date().toISOString().split('T')[0],
         toDate: new Date().toISOString().split('T')[0],
         status: 'all',
     });
-    const [employeeFilter, setEmployeeFilter] = useState(''); // For HOD to filter by employee ID
+    const [employeeFilter, setEmployeeFilter] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const itemsPerPage = 10;
     const [showDatePicker, setShowDatePicker] = useState({ from: false, to: false });
 
+    if (__DEV__) {
+        console.log('user', user);
+    }
+
+    const fetchDepartments = useCallback(async () => {
+        try {
+            const res = await api.get('/departments');
+            setDepartments(res.data || []);
+        } catch (err) {
+            if (err.response?.status === 403) {
+                if (__DEV__) {
+                    console.log('User does not have permission to view departments');
+                }
+                setDepartments([]);
+            } else {
+                console.error('Error fetching departments:', err);
+                setError('Failed to load departments');
+            }
+        }
+    }, []);
+
+    const fetchAttendance = useCallback(async () => {
+        setLoading(true);
+        try {
+            setDepartments([]);
+            const params = {
+                fromDate: filters.fromDate || '',
+                toDate: filters.toDate || '',
+                status: filters.status !== 'all' ? filters.status : undefined,
+            };
+            if (user?.loginType === 'HOD') {
+                if (employeeFilter) {
+                    params.employeeId = employeeFilter;
+                } else {
+                    params.departmentId = user?.department?._id || filters.departmentId;
+                }
+            } else if (user?.employeeId) {
+                params.employeeId = user.employeeId;
+            } else {
+                setError('User ID not available');
+                setLoading(false);
+                return;
+            }
+            if (__DEV__) {
+                console.log('Fetching attendance with params:', params);
+            }
+            const response = await api.get('/attendance', { params });
+            if (__DEV__) {
+                console.log('Attendance API response:', response.data);
+            }
+            if (!response.data || !Array.isArray(response.data.attendance)) {
+                setError('Invalid attendance data received');
+                setAttendance([]);
+                return;
+            }
+            setAttendance(response.data.attendance);
+            if (response.data.departmentName) {
+                setDepartmentName(response.data.departmentName);
+                setDepartments([{ _id: user?.department?._id, name: response.data.departmentName }]);
+            } else {
+                setDepartmentName('');
+                setDepartments([]);
+            }
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching attendance:', err);
+            setError(err.response?.status === 403
+                ? 'You do not have permission to view attendance records'
+                : 'Failed to load attendance data');
+        } finally {
+            setLoading(false);
+        }
+    }, [user, filters, employeeFilter]);
+
     useEffect(() => {
-        // Set employee ID for non-HOD users
         if (user?.loginType !== 'HOD' && user?.employeeId) {
             setFilters(prev => ({ ...prev, employeeId: user.employeeId }));
         }
-        // Only fetch departments for HOD users
         if (user?.loginType === 'HOD') {
             if (user?.department) {
                 setDepartments([{ _id: user.department._id, name: user.department.name }]);
@@ -52,183 +122,81 @@ function Attendance() {
             }
         }
         fetchAttendance();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
+    }, [user, fetchDepartments, fetchAttendance]);
 
-    useEffect(() => {
-        if (user?.department?._id && !employeeFilter) {
-            setFilters(prev => ({
-                ...prev,
-                departmentId: user.department._id
-            }));
-        }
-    }, [user?.department?._id, employeeFilter]);
-
-    const fetchDepartments = async () => {
-        try {
-            const res = await api.get('/departments');
-            setDepartments(res.data);
-        } catch (err) {
-            if (err.response?.status === 403) {
-                console.log('User does not have permission to view departments');
-                setDepartments([]); // Set empty array if no permission
-            } else {
-                console.error('Error fetching departments:', err);
-                setError('Failed to load departments');
-            }
-        }
-    };
-
-    const fetchAttendance = async () => {
-        setLoading(true);
-        try {
-            const params = {
-                fromDate: filters.fromDate || '',
-                toDate: filters.toDate || '',
-                status: filters.status !== 'all' ? filters.status : undefined,
-            };
-
-            // For HOD users
-            if (user?.loginType === 'HOD') {
-                // If employee filter is provided, use it
-                if (employeeFilter) {
-                    params.employeeId = employeeFilter;
-                    delete params.departmentId; // No need for department filter when specific employee is selected
-                } else {
-                    // Otherwise, show all department records
-                    params.departmentId = user?.department?._id || filters.departmentId;
-                }
-            } 
-            // For non-HOD users, only fetch their own attendance
-            else if (user?.employeeId) {
-                params.employeeId = user.employeeId;
-            } else {
-                setError('User ID not available');
-                setLoading(false);
-                return;
-            }
-
-            console.log('Fetching attendance with params:', params);
-            const res = await api.get('/attendance', { params });
-            setAttendance(res.data);
-            setError(null);
-        } catch (err) {
-            console.error('Error fetching attendance:', err);
-            if (err.response?.status === 403) {
-                setError('You do not have permission to view attendance records');
-            } else {
-                setError('Failed to load attendance data');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDateChange = (event, selectedDate, field) => {
-        // On Android, we need to check the event type first
+    const handleDateChange = useCallback((event, selectedDate, field) => {
         if (Platform.OS === 'android') {
-            // Hide the date picker immediately on Android
             setShowDatePicker({ from: false, to: false });
-
-            // If user cancels the picker, don't update the date
-            if (event.type === 'dismissed' || !selectedDate) {
+            if (event.type === 'dismissed' || !selectedDate || isNaN(selectedDate)) {
                 return;
             }
-            
-            // Format the date as YYYY-MM-DD for consistency
             const formattedDate = selectedDate.toISOString().split('T')[0];
-            
-            // Create an update object with the new date
             const update = { [field]: formattedDate };
-            
-            // If we're setting the fromDate and toDate is empty, set toDate to the same date
             if (field === 'fromDate' && !filters.toDate) {
                 update.toDate = formattedDate;
             }
-            
-            // Update the state once with all changes
-            setFilters(prev => ({
-                ...prev,
-                ...update
-            }));
+            setFilters(prev => ({ ...prev, ...update }));
             return;
         }
-        
-        // For iOS, use the existing logic
+        if (!selectedDate || isNaN(selectedDate)) return;
         const formattedDate = selectedDate.toISOString().split('T')[0];
-        
-        // Create an update object with the new date
         const update = { [field]: formattedDate };
-        
-        // If we're setting the fromDate and toDate is empty, set toDate to the same date
         if (field === 'fromDate' && !filters.toDate) {
             update.toDate = formattedDate;
         }
-        
-        // Update the state once with all changes
-        setFilters(prev => ({
-            ...prev,
-            ...update
-        }));
-    };
+        setFilters(prev => ({ ...prev, ...update }));
+    }, [filters]);
 
-    const handleChange = (name, value) => {
-        setFilters({ ...filters, [name]: value });
-    };
+    const handleChange = useCallback((name, value) => {
+        setFilters(prev => ({ ...prev, [name]: value }));
+    }, []);
 
-    const handleFilter = () => {
-        const updatedFilters = { ...filters };
+    const handleFilter = useCallback(() => {
         if (filters.fromDate && !filters.toDate) {
-            updatedFilters.toDate = filters.fromDate;
+            setFilters(prev => ({ ...prev, toDate: filters.fromDate }));
         }
-        setFilters(updatedFilters);
         fetchAttendance();
-        setCurrentPage(1); // Reset to first page when applying new filters
-    };
+        setCurrentPage(1);
+    }, [filters, fetchAttendance]);
 
-    // Calculate pagination
+    const handlePreviousPage = useCallback(() => {
+        if (currentPage > 1) setCurrentPage(currentPage - 1);
+    }, [currentPage]);
+
+    const handleNextPage = useCallback(() => {
+        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    }, [currentPage, totalPages]);
+
+    const formatTime = useCallback((minutes) => {
+        if (!minutes) return '00:00';
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    }, []);
+
+    const renderItem = useCallback(({ item }) => (
+        <Card style={styles.card}>
+            <Card.Content>
+                <Text style={styles.cardTitle}>{item.name || 'Unknown'}</Text>
+                <Text>Employee ID: {item.employeeId || 'N/A'}</Text>
+                <Text>Date: {item.logDate ? new Date(item.logDate).toLocaleDateString() : 'N/A'}</Text>
+                <Text>Time In: {item.timeIn || '-'}</Text>
+                <Text>Time Out: {item.timeOut || '-'}</Text>
+                <Text>Status: {item.status || 'N/A'}{item.halfDay ? ` (${item.halfDay})` : ''}</Text>
+                <Text>OT: {formatTime(item.ot || 0)}</Text>
+            </Card.Content>
+        </Card>
+    ), [formatTime]);
+
+    const hodDepartmentName = user?.loginType === 'HOD'
+        ? departmentName || 'N/A'
+        : 'N/A';
+
     const totalPages = Math.ceil(attendance.length / itemsPerPage);
     const paginatedAttendance = attendance.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
-
-    const handlePreviousPage = () => {
-        if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
-        }
-    };
-
-    const handleNextPage = () => {
-        if (currentPage < totalPages) {
-            setCurrentPage(currentPage + 1);
-        }
-    };
-
-    const formatTime = (minutes) => {
-        if (!minutes) return '00:00';
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-    };
-
-    const renderItem = ({ item }) => (
-        <Card style={styles.card}>
-            <Card.Content>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text>Employee ID: {item.employeeId}</Text>
-                <Text>Date: {new Date(item.logDate).toLocaleDateString()}</Text>
-                <Text>Time In: {item.timeIn || '-'}</Text>
-                <Text>Time Out: {item.timeOut || '-'}</Text>
-                <Text>Status: {item.status}{item.halfDay ? ` (${item.halfDay})` : ''}</Text>
-                <Text>OT: {formatTime(item.ot)}</Text>
-            </Card.Content>
-        </Card>
-    );
-
-    const hodDepartmentName = user?.loginType === 'HOD' && user?.department
-        ? departments.find(dep => dep._id === user.department._id)?.name || 'Unknown'
-        : '';
 
     return (
         <View style={styles.container}>
@@ -240,104 +208,130 @@ function Attendance() {
                 ListHeaderComponent={
                     <View style={styles.filterContainer}>
                         {user?.loginType === 'HOD' && (
-                            <View style={styles.filterRow}>
-                                <View style={styles.employeeFilterContainer}>
-                                    <Text style={styles.filterLabel}>Employee ID:</Text>
-                                    <TextInput
-                                        style={styles.employeeInput}
-                                        placeholder="Filter by Employee ID"
-                                        value={employeeFilter}
-                                        onChangeText={setEmployeeFilter}
-                                        onSubmitEditing={fetchAttendance}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
+                            <View style={styles.employeeFilterContainer}>
+                                <Text style={styles.filterLabel}>Employee ID:</Text>
+                                <TextInput
+                                    style={styles.employeeInput}
+                                    placeholder="Filter by Employee ID"
+                                    value={employeeFilter}
+                                    onChangeText={setEmployeeFilter}
+                                    onSubmitEditing={fetchAttendance}
+                                    keyboardType="numeric"
+                                    accessibilityLabel="Employee ID Filter"
+                                />
                             </View>
                         )}
                         {user?.loginType === 'HOD' && (
                             <View style={styles.filterRow2}>
                                 <Text style={[styles.filterLabel, { paddingTop: 10 }]}>Department:</Text>
-                                <Text style={styles.departmentText}>
-                                    {user?.department?.name || 'N/A'}
-                                </Text>
+                                <Text style={styles.departmentText}>{hodDepartmentName}</Text>
                             </View>
                         )}
-                        <View style={styles.dateInputsContainer}>
-                            <View style={styles.dateInputsContainer}>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDatePicker({ from: true, to: false })}
+                        <View style={styles.statusFilterContainer}>
+
+                            <Text style={styles.filterLabel}>Status:</Text>
+                            <View style={styles.pickerContainer}>
+                                <Picker
+                                    selectedValue={filters.status}
+                                    onValueChange={(value) => handleChange('status', value)}
+                                    style={styles.picker}
+                                    accessibilityLabel="Status Filter"
                                 >
-                                    <Text>From: {filters.fromDate}</Text>
-                                </TouchableOpacity>
-                                {(showDatePicker.from) && (
-                                    <View><DateTimePicker
+                                    <Picker.Item label="All Statuses" value="all" />
+                                    <Picker.Item label="Present" value="Present" />
+                                    <Picker.Item label="Absent" value="Absent" />
+                                    <Picker.Item label="Half Day" value="Half Day" />
+                                </Picker>
+                            </View>
+                        </View>
+                        <View style={styles.dateInputsContainer}>
+                            <TouchableOpacity
+                                style={styles.dateInput}
+                                onPress={() => setShowDatePicker({ from: true, to: false })}
+                                accessibilityLabel="Select From Date"
+                            >
+                                <Text>From: {filters.fromDate}</Text>
+                            </TouchableOpacity>
+                            {showDatePicker.from && (
+                                <View>
+                                    <DateTimePicker
                                         value={new Date(filters.fromDate || new Date())}
                                         mode="date"
                                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                                         onChange={(event, date) => handleDateChange(event, date, 'fromDate')}
                                     />
-                                        {Platform.OS === 'ios' && (
-                                            <Button
-                                                mode="contained"
-                                                onPress={() => setShowDatePicker(prev => ({ ...prev, from: false }))}
-                                                style={styles.doneButton}
-                                            >
-                                                Done
-                                            </Button>)}</View>
-                                )}
-                            </View>
-
-                            <View style={styles.dateInputsContainer}>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDatePicker({ from: false, to: true })}
-                                >
-                                    <Text>To: {filters.toDate}</Text>
-                                </TouchableOpacity>
-                                {(showDatePicker.to) && (
-                                    <View><DateTimePicker
+                                    {Platform.OS === 'ios' && (
+                                        <Button
+                                            mode="contained"
+                                            onPress={() => setShowDatePicker(prev => ({ ...prev, from: false }))}
+                                            style={styles.doneButton}
+                                            accessibilityLabel="Done Selecting From Date"
+                                        >
+                                            Done
+                                        </Button>
+                                    )}
+                                </View>
+                            )}
+                            <TouchableOpacity
+                                style={styles.dateInput}
+                                onPress={() => setShowDatePicker({ from: false, to: true })}
+                                accessibilityLabel="Select To Date"
+                            >
+                                <Text>To: {filters.toDate}</Text>
+                            </TouchableOpacity>
+                            {showDatePicker.to && (
+                                <View>
+                                    <DateTimePicker
                                         value={new Date(filters.toDate || new Date())}
                                         mode="date"
                                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                                         onChange={(event, date) => handleDateChange(event, date, 'toDate')}
                                     />
-                                        {Platform.OS === 'ios' && (
-                                            <Button
-                                                mode="contained"
-                                                onPress={() => setShowDatePicker(prev => ({ ...prev, to: false }))}
-                                                style={styles.doneButton}
-                                            >
-                                                Done
-                                            </Button>)}
-                                    </View>
-                                )}
-                            </View>
+                                    {Platform.OS === 'ios' && (
+                                        <Button
+                                            mode="contained"
+                                            onPress={() => setShowDatePicker(prev => ({ ...prev, to: false }))}
+                                            style={styles.doneButton}
+                                            accessibilityLabel="Done Selecting To Date"
+                                        >
+                                            Done
+                                        </Button>
+                                    )}
+                                </View>
+                            )}
                         </View>
-
                         <Button
                             mode="contained"
                             onPress={handleFilter}
                             style={styles.filterButton}
+                            accessibilityLabel="Apply Filters"
                         >
                             Apply Filters
                         </Button>
                     </View>
                 }
                 ListFooterComponent={
-                    < View style={styles.pagination} >
-                        <View style={styles.individual}><RNButton
-                            title="Previous"
-                            onPress={handlePreviousPage}
-                            disabled={currentPage === 1}
-                        /></View><View style={styles.individual2}>
-                            <Text>Page {currentPage} of {totalPages || 1}</Text></View>
-                        <View style={styles.individua}><RNButton
-                            title="Next"
-                            onPress={handleNextPage}
-                            disabled={currentPage >= totalPages}
-                        /></View>
-                    </View >
+                    <View style={styles.pagination}>
+                        <View style={styles.individual}>
+                            <RNButton
+                                title="Previous"
+                                onPress={handlePreviousPage}
+                                disabled={currentPage === 1}
+                                accessibilityLabel="Previous Page"
+                            />
+                        </View>
+                        <View style={styles.pageText}>
+                            <Text>Page {currentPage} of {totalPages || 1}</Text>
+                        </View>
+                        <View style={styles.individual}>
+                            <RNButton
+                                title="Next"
+                                onPress={handleNextPage}
+                                disabled={currentPage >= totalPages}
+                                accessibilityLabel="Next Page"
+                            />
+                        </View>
+                    </View>
                 }
                 ListEmptyComponent={
                     loading ? (
@@ -371,20 +365,13 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         elevation: 2,
     },
-    input: {
-        backgroundColor: 'white',
-        padding: 12,
-        borderRadius: 4,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
     pickerContainer: {
-        borderWidth: 1,
         borderColor: '#ddd',
+        borderWidth: 1,
         borderRadius: 4,
         marginBottom: 12,
         backgroundColor: 'white',
+        flex: 1,
     },
     picker: {
         height: 50,
@@ -405,25 +392,30 @@ const styles = StyleSheet.create({
         marginTop: -5,
         justifyContent: 'space-between',
         marginBottom: 8,
-
     },
     employeeFilterContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
     },
+    statusFilterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+
+    },
     filterLabel: {
         marginRight: 8,
         minWidth: 100,
         fontWeight: 'bold',
         paddingLeft: 10,
+
     },
     departmentText: {
         flex: 1,
         padding: 10,
         backgroundColor: 'white',
         borderRadius: 4,
-
     },
     employeeInput: {
         flex: 1,
@@ -433,61 +425,6 @@ const styles = StyleSheet.create({
         borderColor: '#ddd',
         borderRadius: 4,
         marginRight: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    applyButton: {
-        marginLeft: 8,
-    },
-    filterButton: {
-        marginTop: 8,
-    },
-    card: {
-        marginBottom: 16,
-        elevation: 2,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    pagination: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
-    },
-    loader: {
-        margin: 20,
-    },
-    error: {
-        color: 'red',
-        textAlign: 'center',
-        margin: 20,
-    },
-    noData: {
-        textAlign: 'center',
-        margin: 20,
-        color: '#666',
-    },
-    dateInput: {
-        backgroundColor: 'white',
-        padding: 12,
-        borderRadius: 4,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    userInfo: {
-        backgroundColor: '#e3f2fd',
-        padding: 12,
-        borderRadius: 4,
-        marginBottom: 12,
-    },
-    userInfoText: {
-        color: '#1976d2',
-        textAlign: 'center',
-        fontWeight: '500',
     },
     filterButton: {
         marginTop: 8,
@@ -503,21 +440,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         marginBottom: 8,
-    },
-    error: {
-        color: 'red',
-        textAlign: 'center',
-        marginTop: 20,
-        padding: 16,
-    },
-    noData: {
-        textAlign: 'center',
-        marginTop: 20,
-        color: '#666',
-        padding: 16,
-    },
-    loader: {
-        marginVertical: 20,
     },
     pagination: {
         flexDirection: 'row',
@@ -528,17 +450,28 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 8,
     },
-    warning: {
-        color: 'orange',
-        textAlign: 'center',
-        marginVertical: 8,
-        fontStyle: 'italic',
-        padding: 8,
-    },
-    individual2: {
+    individual: {
         flex: 1,
-        alignItems: 'center',
-        marginLeft: -15,
+        marginHorizontal: 8,
+    },
+    pageText: {
+        flex: 1,
+        textAlign: 'center',
+    },
+    loader: {
+        marginVertical: 20,
+    },
+    error: {
+        color: '#d32f2f',
+        textAlign: 'center',
+        marginVertical: 20,
+        padding: 16,
+    },
+    noData: {
+        textAlign: 'center',
+        marginVertical: 20,
+        color: '#333',
+        padding: 16,
     },
 });
 

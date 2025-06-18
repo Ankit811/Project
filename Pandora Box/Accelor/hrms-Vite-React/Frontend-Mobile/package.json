@@ -30,6 +30,7 @@
     "expo-status-bar": "~2.2.3",
     "express": "^5.1.0",
     "jwt-decode": "^4.0.0",
+    "lucide-react-native": "^0.515.0",
     "nodemon": "^3.1.10",
     "react": "19.0.0",
     "react-native": "0.79.3",

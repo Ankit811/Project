@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api.js';
 
-export const AuthContext = createContext({
+const AuthContext = createContext({
   user: null,
   loading: true,
   error: null,
@@ -12,7 +12,7 @@ export const AuthContext = createContext({
   logout: () => Promise.reject(new Error('Logout not implemented'))
 });
 
-export const AuthProvider = ({ children }) => {
+const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null); 
@@ -94,3 +94,6 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+export { AuthContext, AuthProvider };
+

@@ -10,12 +10,13 @@ import {
     Alert,
     ActivityIndicator,
     Platform,
+    RefreshControl,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import { Card, Modal, Portal, Button, Provider as PaperProvider } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Picker, Menu } from 'react-native-paper';
+import { Menu } from 'react-native-paper';
 
 const LeaveForm = ({ navigation }) => {
     const { user } = useContext(AuthContext);
@@ -48,6 +49,7 @@ const LeaveForm = ({ navigation }) => {
     });
     const [leaveRecords, setLeaveRecords] = useState([]);
     const [selectedRecord, setSelectedRecord] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
 
     const fetchLeaveRecords = async () => {
@@ -62,11 +64,20 @@ const LeaveForm = ({ navigation }) => {
             });
             const records = response.data.leaves || [];
             setLeaveRecords(records);
+            return true;
         } catch (error) {
             console.error('Error fetching leave records:', error);
             Alert.alert('Error', 'Failed to fetch leave records');
             setLeaveRecords([]);
+            return false;
+        } finally {
+            setRefreshing(false);
         }
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchLeaveRecords();
     };
 
     useEffect(() => {
@@ -350,7 +361,18 @@ const LeaveForm = ({ navigation }) => {
 
     return (
         <PaperProvider>
-            <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+            <ScrollView 
+                style={styles.container} 
+                keyboardShouldPersistTaps="handled"
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={['#2563eb']}
+                        tintColor="#2563eb"
+                    />
+                }
+            >
                 <Card style={styles.card}>
                     <Card.Content>
                         <Text style={styles.title}>Apply for Leave</Text>

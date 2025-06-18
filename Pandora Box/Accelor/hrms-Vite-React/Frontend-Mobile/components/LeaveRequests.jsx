@@ -10,6 +10,7 @@ import {
     Alert,
     ActivityIndicator,
     Platform,
+    RefreshControl,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
@@ -133,7 +134,7 @@ const LeaveRequests = ({ navigation }) => {
             setShowRemarksInput(false);
             setActionType('');
             
-            Alert.alert('Success', 'Leave request has been approved');
+            Alert.alert('Success', `Leave request ${status} successfully`);
         } catch (error) {
             console.error('Error approving leave:', error);
             Alert.alert('Error', 'Failed to approve leave request');
@@ -152,7 +153,18 @@ const LeaveRequests = ({ navigation }) => {
 
     return (
         <PaperProvider>
-            <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+            <ScrollView 
+                style={styles.container} 
+                keyboardShouldPersistTaps="handled"
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={['#2563eb']}
+                        tintColor="#2563eb"
+                    />
+                }
+            >
 
                 <View style={{ marginTop: -20, marginBottom: 40 }}>
                     <Text style={styles.sectionTitle}>Department Leave Requests</Text>
@@ -194,7 +206,7 @@ const LeaveRequests = ({ navigation }) => {
                                                 )}
                                             </Text>
                                             <Text style={[styles.cell, { flex: 2 }]}>
-                                                {leaveRequest.leaveType}
+                                                {leaveType}
                                             </Text>
                                             <View style={[styles.cell, { flex: 2 }]}>
                                                 <Text
@@ -337,7 +349,6 @@ const LeaveRequests = ({ navigation }) => {
                                                 }
                                             ]}>
                                                 {selectedRecord.status?.hod}
-                                                {selectedRecord.status?.remarks && ` - ${selectedRecord.status.remarks}`}
                                             </Text>
                                         ) : (
                                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>

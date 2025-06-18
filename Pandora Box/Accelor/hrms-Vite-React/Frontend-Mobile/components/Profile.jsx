@@ -1,6 +1,6 @@
 // File: screens/ProfileScreen.jsx
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { View, ActivityIndicator, Alert, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ActivityIndicator, Alert, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
@@ -22,6 +22,7 @@ const ProfileScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
   const [fileErrors, setFileErrors] = useState({});
   const [isLocked, setIsLocked] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { handleImagePick } = useImagePicker({ setProfile, setFiles });
 
@@ -45,6 +46,7 @@ const ProfileScreen = ({ navigation }) => {
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [user?.id, navigation]);
 
@@ -165,6 +167,12 @@ const ProfileScreen = ({ navigation }) => {
   if (!profile) return null;
 
   // Common props for all sections
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchProfile();
+  }, [fetchProfile]);
+
+  // Common props for all sections
   const commonProps = {
     profile,
     errors,
@@ -173,7 +181,11 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
       <Tab.Navigator
         screenOptions={{
           tabBarLabelStyle: { fontSize: 12 },
@@ -230,7 +242,7 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 };
 

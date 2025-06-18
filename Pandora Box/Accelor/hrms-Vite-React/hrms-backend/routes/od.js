@@ -120,6 +120,15 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
     }
 
     od.status[currentStage] = status;
+    
+    // Save remarks if provided
+    if (req.body.remarks) {
+      od.remarks = req.body.remarks;
+    } else if (status === 'Approved') {
+      od.remarks = `Approved by ${req.user.role}`;
+    } else if (status === 'Rejected') {
+      od.remarks = `Rejected by ${req.user.role}`;
+    }
 
     if (status === 'Approved' && currentStage === 'hod') {
       od.status.ceo = 'Pending';
@@ -203,7 +212,7 @@ router.get('/', auth, async (req, res) => {
     }
 
     const odRecords = await OD.find(query)
-      .populate('employee', 'name designation')
+      .populate('employee', 'name designation remarks')
       .populate('department', 'name')
       .skip((page - 1) * limit)
       .limit(parseInt(limit))

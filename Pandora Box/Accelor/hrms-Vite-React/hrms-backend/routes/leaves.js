@@ -246,6 +246,14 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       leave.remarks = remarks;
     }
 
+    if (req.body.remarks) {
+      leave.remarks = req.body.remarks;
+    } else if (status === 'Approved') {
+      leave.remarks = `Approved by ${req.user.role}`;
+    } else if (status === 'Rejected') {
+      leave.remarks = `Rejected by ${req.user.role}`;
+    }
+
     if (status === 'Approved' && currentStage === 'hod') {
       leave.status.ceo = 'Pending';
       const ceo = await Employee.findOne({ loginType: 'CEO' });
@@ -341,8 +349,9 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
 // Get Leaves
 router.get('/', auth, async (req, res) => {
   try {
-    const { leaveType, status, fromDate, toDate, page = 1, limit = 10 } = req.query;
+    const { leaveType, status, fromDate, toDate, page = 1, limit = 10, mine } = req.query;
     const user = await Employee.findById(req.user.id);
+    console.log('User:', user);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -374,12 +383,14 @@ router.get('/', auth, async (req, res) => {
 
     if (req.user.role === 'Employee') {
       query.employee = req.user.id;
-    } else if (req.user.role === 'HOD') {
+    } else if (req.user.role === 'HOD' && !mine) {
       query.department = user.department;
+    } else if (req.user.role === 'HOD' && mine) {
+      query.employee = req.user.id;
     }
 
     const leaves = await Leave.find(query)
-      .populate('employee', 'name designation')
+      .populate('employee', 'name designation remarks')
       .populate('department', 'name')
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
