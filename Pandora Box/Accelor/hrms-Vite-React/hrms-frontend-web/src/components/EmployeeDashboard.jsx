@@ -67,11 +67,14 @@ function EmployeeDashboard() {
       setError(null);
 
       const employeeRes = await api.get('/dashboard/employee-info');
-      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, department } = employeeRes.data;
+      const { paidLeaves, employeeType, restrictedHolidays, compensatoryLeaves, department, designation } = employeeRes.data;
 
       const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
+      const eligibleDesignations = ['Technician', 'Sr. Technician', 'Junior Engineer'];
       const isDeptEligible = department && department.name && eligibleDepartments.includes(department.name);
-      setIsEligible(isDeptEligible);
+      const isDesignationEligible = designation && eligibleDesignations.includes(designation);
+      console.log('Eligibility check:', { isDeptEligible, isDesignationEligible, department: department?.name, designation }); // Debug
+      setIsEligible(isDeptEligible && isDesignationEligible);
 
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -187,26 +190,28 @@ function EmployeeDashboard() {
               <p className="text-3xl font-bold text-purple-600 text-center">{data.unpaidLeavesTaken}</p>
             </CardContent>
           </Card>
-          <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
-            <CardHeader className="p-2">
-              <CardTitle className="text-lg font-semibold text-teal-800 text-center">
-                Compensatory Leave
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 text-center">
-              <p className="text-xl font-bold text-teal-600">
-                {data.compensatoryLeaves} hrs
-              </p>
-              <p className="text-sm text-teal-600">
-                ({data.compensatoryAvailable.length} entries)
-              </p>
-            </CardContent>
-          </Card>
+          {!isEligible && ( // Hide for eligible employees
+            <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
+              <CardHeader className="p-2">
+                <CardTitle className="text-lg font-semibold text-teal-800 text-center">
+                  Compensatory Leave
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-2 text-center">
+                <p className="text-xl font-bold text-teal-600">
+                  {data.compensatoryLeaves} hrs
+                </p>
+                <p className="text-sm text-teal-600">
+                  ({data.compensatoryAvailable.length} entries)
+                </p>
+              </CardContent>
+            </Card>
+          )}
           <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
             <CardHeader className="p-2">
               <CardTitle className="text-lg font-semibold text-yellow-800 text-center">
-                Restricted Holidays
-              </CardTitle>
+              Restricted Holidays
+            </CardTitle>
             </CardHeader>
             <CardContent className="p-2">
               <p className="text-3xl font-bold text-yellow-600 text-center">{data.restrictedHolidays}</p>
@@ -258,7 +263,7 @@ function EmployeeDashboard() {
               </CardContent>
             </Card>
           )}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Leave Application Records</CardTitle>
             </CardHeader>
@@ -398,7 +403,7 @@ function EmployeeDashboard() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          )} */}
         </div>
       </div>
     </ContentLayout>

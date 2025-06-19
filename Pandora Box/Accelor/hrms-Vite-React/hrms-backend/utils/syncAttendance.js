@@ -1,9 +1,9 @@
-import { connectSQL } from '../config/sql.js';
-import RawPunchlog from '../models/RawPunchlog.js';
-import Attendance from '../models/Attendance.js';
-import Employee from '../models/Employee.js';
-import SyncMetadata from '../models/SyncMetadata.js';
-import Leave from '../models/Leave.js';
+const { connectSQL, sql } = require('../config/sql');
+const RawPunchlog = require('../models/RawPunchlog');
+const Attendance = require('../models/Attendance');
+const Employee = require('../models/Employee');
+const SyncMetadata = require('../models/SyncMetadata');
+const Leave = require('../models/Leave');
 
 const syncAttendance = async () => {
   try {
@@ -235,4 +235,4 @@ const syncAttendance = async () => {
   }
 };
 
-export  { syncAttendance };
+module.exports = { syncAttendance };

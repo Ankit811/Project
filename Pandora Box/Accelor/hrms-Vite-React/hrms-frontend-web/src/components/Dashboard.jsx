@@ -44,8 +44,8 @@ function Dashboard() {
         const endOfYear = new Date(today.getFullYear(), 11, 31);
 
         const attendanceQuery = attendanceView === 'monthly'
-          ? `?fromDate=${startOfMonth.toISOString()}&toDate=${endOfMonth.toISOString()}`
-          : `?fromDate=${startOfYear.toISOString()}&toDate=${endOfYear.toISOString()}`;
+          ? `?fromDate=${startOfMonth.toISOString().split('T')[0]}&toDate=${endOfMonth.toISOString().split('T')[0]}`
+          : `?fromDate=${startOfYear.toISOString().split('T')[0]}&toDate=${endOfYear.toISOString().split('T')[0]}`;
 
         // Fetch dashboard stats
         const statsRes = await api.get('/dashboard/stats');
@@ -70,10 +70,11 @@ function Dashboard() {
         ]);
 
         // Attendance Data
+        const attendanceRecords = Array.isArray(attendance.data.attendance) ? attendance.data.attendance : [];
         const attendanceByDate = attendanceView === 'monthly'
           ? Array.from({ length: endOfMonth.getDate() }, (_, i) => {
-            const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
-              const count = attendance.data.filter(
+              const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
+              const count = attendanceRecords.filter(
                 (a) =>
                   a.status === 'Present' &&
                   new Date(a.logDate).toDateString() === date.toDateString()
@@ -82,7 +83,7 @@ function Dashboard() {
             })
           : Array.from({ length: 12 }, (_, i) => {
               const month = new Date(today.getFullYear(), i, 1);
-              const count = attendance.data.filter(
+              const count = attendanceRecords.filter(
                 (a) =>
                   a.status === 'Present' &&
                   new Date(a.logDate).getMonth() === i &&
@@ -104,7 +105,7 @@ function Dashboard() {
         setError('Failed to fetch dashboard data. Please try again.');
       } finally {
         setLoading(false);
-      }
+        }
     };
 
     fetchData();

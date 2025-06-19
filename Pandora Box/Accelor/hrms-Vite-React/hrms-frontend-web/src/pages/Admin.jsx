@@ -12,6 +12,8 @@ import ODList from '../components/ODList';
 import Attendance from '../components/Attendance';
 import MyDashboard from '../components/EmployeeDashboard';
 import ApproveOT from '../components/OTApproval';
+import PunchMissedForm from '../components/PunchMissedForm';
+import PunchMissedList from '../components/PunchMissedList';
 
 function Admin() {
   return (
@@ -30,6 +32,8 @@ function Admin() {
           <Route path="od" element={<ODForm />} />
           <Route path="approve-od" element={<ODList />} />
           <Route path="approve-ot" element={<ApproveOT />} />
+          <Route path="punch-missed" element={<PunchMissedForm />} />
+          <Route path="approve-punch-missed" element={<PunchMissedList />} />
         </Routes>
       </div>
     </div>

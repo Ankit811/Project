@@ -1,13 +1,14 @@
-import { Router } from 'express';
-import OD from '../models/OD.js';
-import Employee from '../models/Employee.js';
-import Notification from '../models/Notification.js';
-import Audit from '../models/Audit.js';
-import auth from '../middleware/auth.js';
-import role from '../middleware/role.js';
-const router = Router();
+const express = require('express');
+const OD = require('../models/OD');
+const Employee = require('../models/Employee');
+const Notification = require('../models/Notification');
+const Audit = require('../models/Audit');
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
+const Department = require('../models/Department');
+const router = express.Router();
 
-// Submit OD (unchanged)
+// Submit OD
 router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id);
@@ -21,16 +22,19 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       return res.status(400).json({ message: 'Employee department is required' });
     }
 
-    const { dateOut, timeOut, dateIn, timeIn, purpose, placeUnitVisit } = req.body;
-
-    // Validate required fields
-    if (!dateOut || !timeOut || !dateIn || !purpose || !placeUnitVisit) {
-      return res.status(400).json({ message: 'All required fields (Date Out, Time Out, Date In, Purpose, Place/Unit Visit) must be provided' });
+    const { dateOut, dateIn, timeOut, timeIn, purpose, placeUnitVisit } = req.body;
+    if (!dateOut || !dateIn || !purpose || !placeUnitVisit) {
+      return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Validate date logic
-    if (new Date(dateOut) > new Date(dateIn)) {
-      return res.status(400).json({ message: 'Date Out must be before or equal to Date In' });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const outDate = new Date(dateOut);
+    if (outDate < today) {
+      return res.status(400).json({ message: 'Date Out cannot be in the past' });
+    }
+    if (new Date(dateIn) < outDate) {
+      return res.status(400).json({ message: 'Date In cannot be before Date Out' });
     }
 
     const status = {
@@ -48,9 +52,9 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
       name: user.name,
       designation: user.designation,
       department: user.department,
-      dateOut: new Date(dateOut),
+      dateOut,
+      dateIn,
       timeOut,
-      dateIn: new Date(dateIn),
       timeIn,
       purpose,
       placeUnitVisit,
@@ -78,6 +82,84 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
     res.status(201).json(od);
   } catch (err) {
     console.error('OD submit error:', err.stack);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Get ODs
+router.get('/', auth, async (req, res) => {
+  try {
+    const user = await Employee.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    let query = {};
+    const {
+      employeeId,
+      departmentId,
+      status,
+      fromDate,
+      toDate,
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    if (employeeId) {
+      if (!/^[A-Za-z0-9]+$/.test(employeeId)) {
+        return res.status(400).json({ message: 'Invalid Employee ID format' });
+      }
+      const employee = await Employee.findOne({ employeeId });
+      if (!employee) {
+        return res.status(404).json({ message: 'Employee not found' });
+      }
+      query.employeeId = employeeId;
+    }
+
+    if (departmentId && departmentId !== 'all') {
+      const department = await Department.findById(departmentId);
+      if (!department) {
+        return res.status(404).json({ message: 'Department not found' });
+      }
+      query.department = departmentId;
+    }
+
+    if (req.user.role === 'Employee') {
+      query.employeeId = user.employeeId;
+    } else if (req.user.role === 'HOD') {
+      query.department = user.department;
+    }
+
+    if (status && status !== 'all') {
+      query.$or = [
+        { 'status.hod': status },
+        { 'status.ceo': status },
+        { 'status.admin': status }
+      ];
+    }
+
+    if (fromDate) {
+      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+      query.dateOut = { $gte: startDate };
+    }
+
+    if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+      query.dateIn = { $lte: endDate };
+    }
+
+    const total = await OD.countDocuments(query);
+    const odRecords = await OD.find(query)
+      .populate('department', 'name')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    res.json({ odRecords, total });
+  } catch (err) {
+    console.error('Fetch ODs error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
@@ -120,116 +202,37 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
     }
 
     od.status[currentStage] = status;
-    
-    // Save remarks if provided
-    if (req.body.remarks) {
-      od.remarks = req.body.remarks;
-    } else if (status === 'Approved') {
-      od.remarks = `Approved by ${req.user.role}`;
-    } else if (status === 'Rejected') {
-      od.remarks = `Rejected by ${req.user.role}`;
-    }
 
     if (status === 'Approved' && currentStage === 'hod') {
       od.status.ceo = 'Pending';
       const ceo = await Employee.findOne({ loginType: 'CEO' });
       if (ceo) {
-        await Notification.create({
-          userId: ceo.employeeId,
-          message: `OD request from ${od.name} awaiting your approval`,
-        });
-        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `OD request from ${od.name} awaiting your approval` });
+        await Notification.create({ userId: ceo.employeeId, message: `OD request from ${od.name} awaiting CEO approval` });
+        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `OD request from ${od.name} awaiting CEO approval` });
       }
-    }
-
-    if (status === 'Approved' && currentStage === 'ceo') {
+    } else if (status === 'Approved' && currentStage === 'ceo') {
       od.status.admin = 'Pending';
       const admin = await Employee.findOne({ loginType: 'Admin' });
       if (admin) {
-        await Notification.create({
-          userId: admin.employeeId,
-          message: `OD request from ${od.name} awaiting your acknowledgment`,
-        });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `OD request from ${od.name} awaiting your acknowledgment` });
+        await Notification.create({ userId: admin.employeeId, message: `OD request from ${od.name} awaiting Admin acknowledgment` });
+        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `OD request from ${od.name} awaiting Admin acknowledgment` });
       }
     }
 
-    if (status === 'Acknowledged' && currentStage === 'admin') {
-      await Notification.create({
-        userId: od.employee.employeeId,
-        message: `Your OD request has been acknowledged by Admin`,
-      });
-      if (global._io) global._io.to(od.employee.employeeId).emit('notification', { message: `Your OD request has been acknowledged by Admin` });
-    }
-
-    if (status === 'Rejected') {
-      await Notification.create({
-        userId: od.employee.employeeId,
-        message: `Your OD request was rejected by ${currentStage.toUpperCase()}`,
-      });
-      if (global._io) global._io.to(od.employee.employeeId).emit('notification', { message: `Your OD request was rejected by ${currentStage.toUpperCase()}` });
-    }
-
     await od.save();
+    await Audit.create({ user: user.employeeId, action: `${status} OD`, details: `${status} OD request for ${od.name}` });
 
-    await Audit.create({
-      user: user.employeeId,
-      action: `${status} OD`,
-      details: `${status} OD request for ${od.name} by ${currentStage.toUpperCase()}`,
-    });
+    const employee = await Employee.findById(od.employee);
+    if (employee) {
+      await Notification.create({ userId: employee.employeeId, message: `Your OD request has been ${status.toLowerCase()} by ${currentStage.toUpperCase()}` });
+      if (global._io) global._io.to(employee.employeeId).emit('notification', { message: `Your OD request has been ${status.toLowerCase()} by ${currentStage.toUpperCase()}` });
+    }
 
-    res.json({ message: `OD ${status.toLowerCase()} successfully`, od });
+    res.json(od);
   } catch (err) {
     console.error('OD approval error:', err.stack);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Get ODs (unchanged)
-router.get('/', auth, async (req, res) => {
-  try {
-    const { status, fromDate, toDate, page = 1, limit = 10 } = req.query;
-    const user = await Employee.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const query = {};
-    if (status && status !== 'all') {
-      query.$or = [
-        { 'status.hod': status },
-        { 'status.ceo': status },
-        { 'status.admin': status },
-      ];
-    }
-    if (fromDate) query.dateOut = { $gte: new Date(fromDate) };
-    if (toDate) query.dateIn = { $lte: new Date(toDate) };
-
-    if (req.user.role === 'Employee') {
-      query.employee = req.user.id;
-    } else if (req.user.role === 'HOD') {
-      query.department = user.department;
-    }
-
-    const odRecords = await OD.find(query)
-      .populate('employee', 'name designation remarks')
-      .populate('department', 'name')
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .sort({ createdAt: -1 });
-
-    const total = await OD.countDocuments(query);
-
-    res.json({
-      odRecords,
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-    });
-  } catch (err) {
-    console.error('Fetch ODs error:', err.stack);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-export default router;
+module.exports = router;

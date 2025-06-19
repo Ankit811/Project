@@ -1,10 +1,10 @@
-import { connect, disconnect } from 'mongoose';
-import Employee from '../models/Employee';
+const mongoose = require('mongoose');
+const Employee = require('../models/Employee');
 
 async function migrate() {
   try {
     // Connect to MongoDB (update the connection string as needed)
-    await connect('mongodb+srv://ankit111811:ankit001@cluster0.15kd4w5.mongodb.net/', {
+    await mongoose.connect('mongodb+srv://ankit111811:ankit001@cluster0.15kd4w5.mongodb.net/', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
@@ -48,7 +48,7 @@ async function migrate() {
   } catch (err) {
     console.error('Migration error:', err);
   } finally {
-    await disconnect();
+    await mongoose.disconnect();
     console.log('Disconnected from MongoDB');
   }
 }

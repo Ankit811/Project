@@ -1,11 +1,10 @@
-import { Router } from 'express';
-import { compare } from 'bcryptjs';
-import pkg from 'jsonwebtoken';
-const { verify, sign } = pkg;
-import Employee from '../models/Employee.js';
-import rateLimit from 'express-rate-limit';
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const Employee = require('../models/Employee');
+const rateLimit = require('express-rate-limit');
 
-const router = Router();
+const router = express.Router();
 
 // Rate limiter: Max 10 attempts per 15 minutes per IP
 const loginLimiter = rateLimit({
@@ -28,7 +27,7 @@ const authenticateToken = (req, res, next) => {
   }
 
   try {
-    const decoded = verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded; // Attach decoded token (contains id, loginType, employeeId)
     next();
   } catch (err) {
@@ -45,10 +44,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.log('Found user:', user);
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const isMatch = await compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const token = sign(
+    const token = jwt.sign(
       { id: user._id, loginType: user.loginType, employeeId: user.employeeId },
       process.env.JWT_SECRET,
       { expiresIn: '100h' }
@@ -62,7 +61,9 @@ router.post('/login', loginLimiter, async (req, res) => {
         name: user.name,
         employeeId: user.employeeId,
         email: user.email,
-        department: user.department ? { name: user.department.name } : null, // Include department name
+        department: user.department ? { _id: user.department._id, name: user.department.name } : null,
+        designation: user.designation,
+        role: user.loginType, // Added role
       },
     });
   } catch (err) {
@@ -75,8 +76,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await Employee.findById(req.user.id)
-      .select('-password')
-      .populate('department'); // Populate department field
+      .select('_id loginType name email employeeId gender department designation employeeType')
+      .populate('department');
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
     }
@@ -86,7 +87,11 @@ router.get('/me', authenticateToken, async (req, res) => {
       name: user.name,
       email: user.email,
       employeeId: user.employeeId,
-      department: user.department ? { name: user.department.name } : null, // Include department name
+      gender: user.gender,
+      department: user.department ? { _id: user.department._id, name: user.department.name } : null,
+      designation: user.designation,
+      employeeType: user.employeeType,
+      role: user.loginType, // Added role
     });
   } catch (err) {
     console.error('Error fetching user:', err);
@@ -94,4 +99,4 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

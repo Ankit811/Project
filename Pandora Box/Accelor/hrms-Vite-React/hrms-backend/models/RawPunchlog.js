@@ -1,6 +1,6 @@
-import { Schema, model } from 'mongoose';
+const mongoose = require('mongoose');
 
-const rawPunchlogSchema = new Schema({
+const rawPunchlogSchema = new mongoose.Schema({
   UserID: {
     type: String,
     required: true,
@@ -27,4 +27,4 @@ const rawPunchlogSchema = new Schema({
 // ✅ Unique compound index to prevent duplicate punch logs
 rawPunchlogSchema.index({ UserID: 1, LogDate: 1, LogTime: 1 }, { unique: true });
 
-export default model('RawPunchlog', rawPunchlogSchema);
+module.exports = mongoose.model('RawPunchlog', rawPunchlogSchema);

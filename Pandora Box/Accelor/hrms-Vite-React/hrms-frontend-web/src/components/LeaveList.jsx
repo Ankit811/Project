@@ -1,8 +1,12 @@
-import React, { useEffect, useState, useContext, useCallback } from 'react';
-import {
-  Card,
-  CardContent,
-} from "../components/ui/card";
+import React, {
+  useEffect,
+  useState,
+  useContext,
+  useCallback,
+  useMemo,
+} from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent } from "../components/ui/card";
 import {
   Table,
   TableHeader,
@@ -30,194 +34,310 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import Pagination from "./Pagination";
-import api from '../services/api';
-import ContentLayout from './ContentLayout';
-import { AuthContext } from '../context/AuthContext';
+import api from "../services/api";
+import ContentLayout from "./ContentLayout";
+import { AuthContext } from "../context/AuthContext";
+import { useFileHandler } from "../hooks/useFileHandler";
 
 function LeaveList() {
   const { user } = useContext(AuthContext);
+  const initialFilters = useMemo(
+    () => ({
+      employeeId: user?.loginType === "Employee" ? user?.employeeId || "" : "",
+      departmentId:
+        user?.loginType === "HOD" && user?.department
+          ? user.department._id
+          : "all",
+      leaveType: "all",
+      status: "all",
+      fromDate: "",
+      toDate: "",
+    }),
+    [user]
+  );
   const [leaves, setLeaves] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [filters, setFilters] = useState({
-    leaveType: 'all',
-    status: 'all',
-    fromDate: '',
-    toDate: '',
-  });
+  const [departments, setDepartments] = useState([]);
+  const [filters, setFilters] = useState(initialFilters);
+  const [tempFilters, setTempFilters] = useState(initialFilters);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState(null);
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(10);
-  const [rejectionRemarks, setRejectionRemarks] = useState('');
+  const [rejectionRemarks, setRejectionRemarks] = useState("");
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [pendingRejection, setPendingRejection] = useState(null);
 
-  const fetchLeaves = useCallback(async (currentPage = page, currentLimit = limit) => {
+  const { handleViewFile, error: fileError } = useFileHandler(
+    selectedLeave?.medicalCertificate?._id
+  );
+
+  const fetchLeaves = useCallback(async (filterParams) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const query = new URLSearchParams({
-        leaveType: filters.leaveType,
-        status: filters.status,
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
-        page: currentPage,
-        limit: currentLimit,
-      }).toString();
-      const res = await api.get(`/leaves?${query}`);
-      setLeaves(res.data.leaves);
-      setFiltered(res.data.leaves);
-      setTotal(res.data.total);
-      setPage(res.data.page);
+      const normalizedFilters = { ...filterParams, page: currentPage, limit: itemsPerPage };
+      if (normalizedFilters.fromDate && !normalizedFilters.toDate) {
+        normalizedFilters.toDate = normalizedFilters.fromDate;
+      }
+      if (
+        normalizedFilters.fromDate &&
+        normalizedFilters.toDate &&
+        new Date(normalizedFilters.toDate) < new Date(normalizedFilters.fromDate)
+      ) {
+        setError("To Date cannot be earlier than From Date.");
+        setLoading(false);
+        return;
+      }
+      if (normalizedFilters.departmentId === "all") {
+        delete normalizedFilters.departmentId;
+      }
+      console.log("Fetching leaves with:", normalizedFilters);
+      const res = await api.get("/leaves", { params: normalizedFilters });
+      setLeaves(res.data.leaves || []);
+      setTotal(res.data.total || 0);
+      if (res.data.leaves.length === 0) {
+        setError(
+          filterParams.employeeId
+            ? "No leave records found for the specified Employee ID."
+            : "No leave records found for the selected filters."
+        );
+      }
     } catch (err) {
-      console.error('Error fetching leave list:', err);
-      setError(err.response?.data?.message || 'Failed to fetch leaves. Please try again.');
+      console.error("Error fetching leave list:", err);
+      setError(
+        err.response?.data?.message || "Failed to fetch leaves. Please try again."
+      );
     } finally {
       setLoading(false);
     }
-  }, [filters, page, limit]);
+  }, [currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    fetchLeaves();
-  }, [fetchLeaves]);
-
-  const handleFilterChange = (name, value) => {
-    let newFilters = { ...filters, [name]: value };
-
-    if (name === 'fromDate' || name === 'toDate') {
-      const fromDate = name === 'fromDate' ? value : filters.fromDate;
-      const toDate = name === 'toDate' ? value : filters.toDate;
-      if (fromDate && toDate && new Date(toDate) < new Date(fromDate)) {
-        setError('To Date cannot be earlier than From Date.');
-        return;
-      }
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const res = await api.get("/departments");
+      setDepartments(res.data);
+    } catch (err) {
+      console.error("Error fetching departments:", err);
+      setError("Failed to load departments");
     }
+  }, []);
 
-    setFilters(newFilters);
-    setPage(1);
-    const query = new URLSearchParams({
-      leaveType: newFilters.leaveType,
-      status: newFilters.status,
-      fromDate: newFilters.fromDate,
-      toDate: newFilters.toDate,
-      page: 1,
-      limit,
-    }).toString();
-    setLoading(true);
-    api.get(`/leaves?${query}`)
-      .then(res => {
-        setLeaves(res.data.leaves);
-        setFiltered(res.data.leaves);
-        setTotal(res.data.total);
-        setPage(res.data.page);
-        setError(null);
-      })
-      .catch(err => {
-        console.error('Error applying filters:', err);
-        setError(err.response?.data?.message || 'Failed to apply filters.');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+  // Initial data fetch and filter setup based on user role
+  useEffect(() => {
+    if (user?.loginType === "HOD" && user?.department) {
+      setDepartments([{ _id: user.department._id, name: user.department.name }]);
+      const hodFilters = {
+        ...initialFilters,
+        departmentId: user.department._id,
+      };
+      setFilters(hodFilters);
+      setTempFilters(hodFilters);
+      fetchLeaves(hodFilters);
+    } else if (user?.loginType === "Employee") {
+      const empFilters = {
+        ...initialFilters,
+        employeeId: user?.employeeId || "",
+      };
+      setFilters(empFilters);
+      setTempFilters(empFilters);
+      fetchLeaves(empFilters);
+    } else if (user) {
+      fetchDepartments();
+      setFilters(initialFilters);
+      setTempFilters(initialFilters);
+      fetchLeaves(initialFilters);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, fetchDepartments, initialFilters]);
+
+  // Refetch leaves when pagination changes
+  useEffect(() => {
+    fetchLeaves(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage, fetchLeaves]);
+
+  const handleChange = (name, value) => {
+    setTempFilters({ ...tempFilters, [name]: value });
   };
 
-  const handleApproval = async (id, status, currentStage, remarks = '') => {
+  const handleFilter = () => {
+    if (tempFilters.employeeId && !/^[A-Za-z0-9]+$/.test(tempFilters.employeeId)) {
+      setError("Invalid Employee ID format.");
+      return;
+    }
+    setFilters(tempFilters);
+    setCurrentPage(1);
+    fetchLeaves(tempFilters);
+  };
+
+  const handleApproval = async (id, status, currentStage, remarks = "") => {
     try {
       const leaveData = { status };
-      if (status === 'Rejected' && ['hod', 'ceo'].includes(currentStage)) {
+      if (status === "Rejected" && ["hod", "ceo"].includes(currentStage)) {
         if (!remarks.trim()) {
-          alert('Remarks are required for rejection.');
+          alert("Remarks are required for rejection.");
           return;
         }
         leaveData.remarks = remarks;
       }
       await api.put(`/leaves/${id}/approve`, leaveData);
-      const updatedLeaves = leaves.map(l => {
+      const updatedLeaves = leaves.map((l) => {
         if (l._id === id) {
           const newStatus = { ...l.status, [currentStage]: status };
-          if (status === 'Approved') {
-            if (currentStage === 'hod') {
-              newStatus.ceo = 'Pending';
-            } else if (currentStage === 'ceo') {
-              newStatus.admin = 'Pending';
+          if (status === "Approved") {
+            if (currentStage === "hod") {
+              newStatus.ceo = "Pending";
+            } else if (currentStage === "ceo") {
+              newStatus.admin = "Pending";
             }
           }
-          return { ...l, status: newStatus, remarks: status === 'Rejected' ? remarks : l.remarks };
+          return {
+            ...l,
+            status: newStatus,
+            remarks: status === "Rejected" ? remarks : l.remarks,
+          };
         }
         return l;
       });
       setLeaves(updatedLeaves);
-      setFiltered(updatedLeaves);
       alert(`Leave ${status.toLowerCase()} successfully.`);
     } catch (err) {
-      console.error('Approval error:', err);
-      alert(`Error processing leave approval: ${err.response?.data?.message || err.message}`);
+      console.error("Approval error:", err);
+      alert(
+        `Error processing leave approval: ${
+          err.response?.data?.message || err.message
+        }`
+      );
     }
   };
 
   const handleRejection = (id, stage) => {
     setPendingRejection({ id, stage });
-    setRejectionRemarks('');
+    setRejectionRemarks("");
     setShowRejectionDialog(true);
   };
 
   const confirmRejection = () => {
     if (!rejectionRemarks.trim()) {
-      alert('Please enter remarks for rejection.');
+      alert("Please enter remarks for rejection.");
       return;
     }
-    handleApproval(pendingRejection.id, 'Rejected', pendingRejection.stage, rejectionRemarks);
+    handleApproval(
+      pendingRejection.id,
+      "Rejected",
+      pendingRejection.stage,
+      rejectionRemarks
+    );
     setShowRejectionDialog(false);
     setPendingRejection(null);
   };
 
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-    fetchLeaves(newPage, limit);
+  // Calculate leave duration
+  const getLeaveDuration = (leave) => {
+    if (leave.halfDay?.date) {
+      return "Half Day";
+    }
+    if (leave.fullDay?.from && leave.fullDay?.to) {
+      const from = new Date(leave.fullDay.from);
+      const to = new Date(leave.fullDay.to);
+      const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+      return `${days} Day${days > 1 ? 's' : ''}`;
+    }
+    return "N/A";
   };
 
-  const handlePageSizeChange = (newSize) => {
-    setLimit(newSize);
-    setPage(1);
-    fetchLeaves(1, newSize);
-  };
-
-  console.log('User loginType:', user?.loginType);
-  console.log('Leaves:', leaves);
+  const hodDepartmentName =
+    user?.loginType === "HOD" && user?.department
+      ? departments.find((dep) => dep._id === user.department._id)?.name ||
+        "Unknown"
+      : "";
 
   return (
     <ContentLayout title="Leave List">
-      <Card className="max-w-5xl mx-auto shadow-lg border">
+      <Card className="w-full mx-auto shadow-lg border">
         <CardContent className="p-6">
           {error && (
             <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
               {error}
             </div>
           )}
-          <div className="flex justify-between mb-4">
-            <h2 className="text-lg font-semibold">Leave Records</h2>
-            <Button
-              onClick={() => fetchLeaves(1)}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {loading ? 'Loading...' : 'Refresh'}
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-4 mb-6">
+          {fileError && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+              {fileError}
+            </div>
+          )}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+          >
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="leaveType" className="text-sm font-medium text">
-                Leave Type
-              </Label>
+              <Label htmlFor="employeeId">Employee ID</Label>
+              <Input
+                id="employeeId"
+                name="employeeId"
+                value={tempFilters.employeeId}
+                onChange={(e) => handleChange("employeeId", e.target.value)}
+                placeholder="Employee ID"
+                disabled={user?.loginType === "Employee"}
+                className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="departmentId">Department</Label>
+              {user?.loginType === "HOD" ? (
+                <Input
+                  id="departmentId"
+                  value={hodDepartmentName}
+                  readOnly
+                  className="mt-1 border-gray-300 bg-gray-100 cursor-not-allowed"
+                  placeholder="Your Department"
+                />
+              ) : user?.loginType === "Employee" ? (
+                <Input
+                  id="departmentId"
+                  value={user?.department?.name || "Unknown"}
+                  readOnly
+                  className="mt-1 border-gray-300 bg-gray-100 cursor-not-allowed"
+                  placeholder="Your Department"
+                />
+              ) : (
+                <Select
+                  onValueChange={(value) => handleChange("departmentId", value)}
+                  value={tempFilters.departmentId}
+                  disabled={loading}
+                >
+                  <SelectTrigger
+                    id="departmentId"
+                    className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map((dep) => (
+                      <SelectItem key={dep._id} value={dep._id}>
+                        {dep.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="leaveType">Leave Type</Label>
               <Select
-                onValueChange={(value) => handleFilterChange('leaveType', value)}
-                value={filters.leaveType}
-                aria-label="Select leave type filter"
+                onValueChange={(value) => handleChange("leaveType", value)}
+                value={tempFilters.leaveType}
                 disabled={loading}
               >
-                <SelectTrigger id="leaveType" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger
+                  id="leaveType"
+                  className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                >
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -227,22 +347,26 @@ function LeaveList() {
                   <SelectItem value="Maternity">Maternity</SelectItem>
                   <SelectItem value="Paternity">Paternity</SelectItem>
                   <SelectItem value="Compensatory">Compensatory</SelectItem>
-                  <SelectItem value="Restricted Holidays">Restricted Holidays</SelectItem>
-                  <SelectItem value="Leave Without Pay(LWP)">Leave Without Pay(LWP)</SelectItem>
+                  <SelectItem value="Restricted Holidays">
+                    Restricted Holidays
+                  </SelectItem>
+                  <SelectItem value="Leave Without Pay(LWP)">
+                    Leave Without Pay(LWP)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="status" className="text-sm font-medium text">
-                Approval Status (Any Stage)
-              </Label>
+              <Label htmlFor="status">Approval Status (Any Stage)</Label>
               <Select
-                onValueChange={(value) => handleFilterChange('status', value)}
-                value={filters.status}
-                aria-label="Select approval status filter"
+                onValueChange={(value) => handleChange("status", value)}
+                value={tempFilters.status}
                 disabled={loading}
               >
-                <SelectTrigger id="status" className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                <SelectTrigger
+                  id="status"
+                  className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                >
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -255,110 +379,150 @@ function LeaveList() {
               </Select>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="fromDate" className="text-sm font-medium text-gray-700">
-                From Date
-              </Label>
+              <Label htmlFor="fromDate">From Date</Label>
               <Input
                 id="fromDate"
                 name="fromDate"
                 type="date"
-                value={filters.fromDate}
-                onChange={(e) => handleFilterChange('fromDate', e.target.value)}
+                value={tempFilters.fromDate}
+                onChange={(e) => handleChange("fromDate", e.target.value)}
                 className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                aria-label="From Date"
                 disabled={loading}
               />
             </div>
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="toDate" className="text-sm font-medium text-gray-700">
-                To Date
-              </Label>
+              <Label htmlFor="toDate">To Date</Label>
               <Input
                 id="toDate"
                 name="toDate"
                 type="date"
-                value={filters.toDate}
-                onChange={(e) => handleFilterChange('toDate', e.target.value)}
+                value={tempFilters.toDate}
+                onChange={(e) => handleChange("toDate", e.target.value)}
                 className="mt-1 border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                aria-label="To Date"
                 disabled={loading}
               />
             </div>
-          </div>
+            <div className="flex gap-2 items-end">
+              <Button
+                onClick={handleFilter}
+                className="px-4 py-2 bg-blue-600 text-white"
+              >
+                Filter
+              </Button>
+            </div>
+          </motion.div>
           <div className="overflow-x-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow className="border-b">
-                  <TableHead className="font-semibold text">Employee</TableHead>
-                  <TableHead className="font-semibold text">L.A Date</TableHead>
-                  <TableHead className="font-semibold text">Type</TableHead>
-                  <TableHead className="font-semibold text">From</TableHead>
-                  <TableHead className="font-semibold text">To</TableHead>
-                  <TableHead className="font-semibold text">View</TableHead>
-                  <TableHead className="font-semibold text">Status (HOD)</TableHead>
-                  <TableHead className="font-semibold text">Status (CEO)</TableHead>
-                  <TableHead className="font-semibold text">Status (Admin)</TableHead>
-                  {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
-                    <TableHead className="font-semibold text">Action</TableHead>
+                  <TableHead className="font-semibold">Employee</TableHead>
+                  <TableHead className="font-semibold">L.A Date</TableHead>
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">From</TableHead>
+                  <TableHead className="font-semibold">To</TableHead>
+                  <TableHead className="font-semibold">View</TableHead>
+                  <TableHead className="font-semibold">Status (HOD)</TableHead>
+                  <TableHead className="font-semibold">Status (CEO)</TableHead>
+                  <TableHead className="font-semibold">Status (Admin)</TableHead>
+                  {["HOD", "Admin", "CEO"].includes(user?.loginType) && (
+                    <TableHead className="font-semibold">Action</TableHead>
                   )}
-                  <TableHead className="font-semibold text">Remarks</TableHead>
+                  <TableHead className="font-semibold">Remarks</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 11 : 10}
-                      className="text-center text py-4"
+                      colSpan={
+                        ["HOD", "Admin", "CEO"].includes(user?.loginType) ? 11 : 10
+                      }
+                      className="text-center py-4"
                     >
                       Loading...
                     </TableCell>
                   </TableRow>
-                ) : filtered.length === 0 ? (
+                ) : leaves.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={['HOD', 'Admin', 'CEO'].includes(user?.loginType) ? 11 : 10}
-                      className="text-center text py-4"
+                      colSpan={
+                        ["HOD", "Admin", "CEO"].includes(user?.loginType) ? 11 : 10
+                      }
+                      className="text-center py-4"
                     >
                       No leave records found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((leave) => {
-                    console.log(`Leave ID: ${leave._id}, Status:`, leave.status, `User LoginType: ${user?.loginType}`);
-                    return (
-                      <TableRow key={leave._id} className="hover:bg-gray-50">
-                        <TableCell className="text">{leave.name}</TableCell>
-                        <TableCell className="text">{new Date(leave.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell className="text">{leave.leaveType}</TableCell>
-                        <TableCell className="text">
-                          {new Date(leave.fullDay?.from || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text">
-                          {new Date(leave.fullDay?.to || leave.halfDay?.date || leave.createdAt).toLocaleDateString()}
-                        </TableCell>
+                  leaves.map((leave) => (
+                    <TableRow key={leave._id} className="hover:bg-gray-50">
+                      <TableCell>{leave.name}</TableCell>
+                      <TableCell>
+                        {new Date(leave.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{leave.leaveType}</TableCell>
+                      <TableCell>
+                        {new Date(
+                          leave.fullDay?.from || leave.halfDay?.date || leave.createdAt
+                        ).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(
+                          leave.fullDay?.to || leave.halfDay?.date || leave.createdAt
+                        ).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          onClick={() => setSelectedLeave(leave)}
+                          className="bg-blue-600 text-white"
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                      <TableCell>{leave.status.hod || "Pending"}</TableCell>
+                      <TableCell>{leave.status.ceo || "Pending"}</TableCell>
+                      <TableCell>{leave.status.admin || "Pending"}</TableCell>
+                      {["HOD", "Admin", "CEO"].includes(user?.loginType) && (
                         <TableCell>
-                          <Button
-                            size="sm"
-                            onClick={() => setSelectedLeave(leave)}
-                            className="bg-blue-600 text-white"
-                          >
-                            View
-                          </Button>
-                        </TableCell>
-                        <TableCell className="text">{leave.status.hod || 'Pending'}</TableCell>
-                        <TableCell className="text">{leave.status.ceo || 'Pending'}</TableCell>
-                        <TableCell className="text">{leave.status.admin || 'Pending'}</TableCell>
-                        {['HOD', 'Admin', 'CEO'].includes(user?.loginType) && (
-                          <TableCell>
-                            {user.loginType === 'HOD' && leave.status.hod === 'Pending' && (
+                          {user.loginType === "HOD" && leave.status.hod === "Pending" && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() =>
+                                  handleApproval(leave._id, "Approved", "hod")
+                                }
+                                disabled={loading || leave.status.hod !== "Pending"}
+                                aria-label={`Approve leave for ${leave.name}`}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                onClick={() => handleRejection(leave._id, "hod")}
+                                disabled={loading || leave.status.hod !== "Pending"}
+                                aria-label={`Reject leave for ${leave.name}`}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                          {user.loginType === "CEO" &&
+                            leave.status.hod === "Approved" &&
+                            leave.status.ceo === "Pending" && (
                               <div className="flex gap-2">
                                 <Button
                                   variant="default"
                                   size="sm"
                                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Approved', 'hod')}
-                                  disabled={loading || leave.status.hod !== 'Pending'}
+                                  onClick={() =>
+                                    handleApproval(leave._id, "Approved", "ceo")
+                                  }
+                                  disabled={loading || leave.status.ceo !== "Pending"}
                                   aria-label={`Approve leave for ${leave.name}`}
                                 >
                                   Approve
@@ -367,70 +531,50 @@ function LeaveList() {
                                   variant="destructive"
                                   size="sm"
                                   className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleRejection(leave._id, 'hod')}
-                                  disabled={loading || leave.status.hod !== 'Pending'}
+                                  onClick={() => handleRejection(leave._id, "ceo")}
+                                  disabled={loading || leave.status.ceo !== "Pending"}
                                   aria-label={`Reject leave for ${leave.name}`}
                                 >
                                   Reject
                                 </Button>
                               </div>
                             )}
-                            {user.loginType === 'CEO' && leave.status.hod === 'Approved' && leave.status.ceo === 'Pending' && (
+                          {user.loginType === "Admin" &&
+                            leave.status.ceo === "Approved" &&
+                            leave.status.admin === "Pending" && (
                               <div className="flex gap-2">
                                 <Button
                                   variant="default"
                                   size="sm"
                                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Approved', 'ceo')}
-                                  disabled={loading || leave.status.ceo !== 'Pending'}
-                                  aria-label={`Approve leave for ${leave.name}`}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="bg-red-600 hover:bg-red-700 text-white"
-                                  onClick={() => handleRejection(leave._id, 'ceo')}
-                                  disabled={loading || leave.status.ceo !== 'Pending'}
-                                  aria-label={`Reject leave for ${leave.name}`}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                            {user.loginType === 'Admin' && leave.status.ceo === 'Approved' && leave.status.admin === 'Pending' && (
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => handleApproval(leave._id, 'Acknowledged', 'admin')}
-                                  disabled={loading || leave.status.admin !== 'Pending'}
+                                  onClick={() =>
+                                    handleApproval(leave._id, "Acknowledged", "admin")
+                                  }
+                                  disabled={loading || leave.status.admin !== "Pending"}
                                   aria-label={`Acknowledge leave for ${leave.name}`}
                                 >
                                   Acknowledged
                                 </Button>
                               </div>
                             )}
-                          </TableCell>
-                        )}
-                        <TableCell className="text">{leave.remarks || 'N/A'}</TableCell>
-                      </TableRow>
-                    );
-                  })
+                        </TableCell>
+                      )}
+                      <TableCell>{leave.remarks || "N/A"}</TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
-
             <Pagination
-              currentPage={page}
-              itemsPerPage={limit}
+              currentPage={currentPage}
+              itemsPerPage={itemsPerPage}
               totalItems={total}
-              onPageChange={handlePageChange}
-              onPageSizeChange={handlePageSizeChange}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => {
+                setItemsPerPage(size);
+                setCurrentPage(1);
+              }}
             />
-
             <Dialog open={!!selectedLeave} onOpenChange={() => setSelectedLeave(null)}>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
@@ -441,15 +585,59 @@ function LeaveList() {
                 </DialogHeader>
                 {selectedLeave && (
                   <div className="space-y-3">
-                    <p><strong>L.A Date:</strong> {new Date(selectedLeave.createdAt).toLocaleDateString()}</p>
-                    <p><strong>Leave Type:</strong> {selectedLeave.leaveType}</p>
-                    <p><strong>Reason:</strong> {selectedLeave.reason}</p>
-                    <p><strong>Charge Given To:</strong> {selectedLeave.chargeGivenTo}</p>
-                    <p><strong>Emergency Contact:</strong> {selectedLeave.emergencyContact}</p>
-                    {selectedLeave.compensatoryDate && <p><strong>Compensatory Date:</strong> {new Date(selectedLeave.compensatoryDate).toLocaleDateString()}</p>}
-                    {selectedLeave.projectDetails && <p><strong>Project Details:</strong> {selectedLeave.projectDetails}</p>}
-                    {selectedLeave.restrictedHoliday && <p><strong>Restricted Holiday:</strong> {selectedLeave.restrictedHoliday}</p>}
-                    <p><strong>Remarks:</strong> {selectedLeave.remarks || 'N/A'}</p>
+                    <p>
+                      <strong>L.A Date:</strong>{" "}
+                      {new Date(selectedLeave.createdAt).toLocaleDateString()}
+                    </p>
+                    <p>
+                      <strong>Leave Type:</strong> {selectedLeave.leaveType}
+                    </p>
+                    <p>
+                      <strong>Leave Duration:</strong> {getLeaveDuration(selectedLeave)}
+                    </p>
+                    <p>
+                      <strong>Reason:</strong> {selectedLeave.reason}
+                    </p>
+                    <p>
+                      <strong>Charge Given To:</strong> {selectedLeave.chargeGivenTo}
+                    </p>
+                    <p>
+                      <strong>Emergency Contact:</strong>{" "}
+                      {selectedLeave.emergencyContact}
+                    </p>
+                    {selectedLeave.compensatoryDate && (
+                      <p>
+                        <strong>Compensatory Date:</strong>{" "}
+                        {new Date(selectedLeave.compensatoryDate).toLocaleDateString()}
+                      </p>
+                    )}
+                    {selectedLeave.projectDetails && (
+                      <p>
+                        <strong>Project Details:</strong> {selectedLeave.projectDetails}
+                      </p>
+                    )}
+                    {selectedLeave.restrictedHoliday && (
+                      <p>
+                        <strong>Restricted Holiday:</strong>{" "}
+                        {selectedLeave.restrictedHoliday}
+                      </p>
+                    )}
+                    {selectedLeave.medicalCertificate && (
+                      <p>
+                        <strong>Medical Certificate:</strong>{" "}
+                        <Button
+                          size="sm"
+                          onClick={handleViewFile}
+                          className="bg-blue-600 text-white"
+                          disabled={fileError}
+                        >
+                          View {selectedLeave.medicalCertificate.filename}
+                        </Button>
+                      </p>
+                    )}
+                    <p>
+                      <strong>Remarks:</strong> {selectedLeave.remarks || "N/A"}
+                    </p>
                   </div>
                 )}
                 <DialogFooter className="mt-4">
@@ -457,8 +645,10 @@ function LeaveList() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-
-            <Dialog open={showRejectionDialog} onOpenChange={() => setShowRejectionDialog(false)}>
+            <Dialog
+              open={showRejectionDialog}
+              onOpenChange={() => setShowRejectionDialog(false)}
+            >
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Reject Leave</DialogTitle>

@@ -27,14 +27,16 @@ function Navbar() {
         subItems: [
           { text: 'Apply Leave', path: '/admin/leave' },
           { text: 'Apply OD', path: '/admin/od' },
+          { text: 'Apply Punch Missed', path: '/admin/punch-missed' },
         ],
       },
       {
-        text: 'Approve',
+        text: 'Acknowledge',
         subItems: [
-          { text: 'Approve Leave', path: '/admin/approve-leave' },
-          { text: 'Approve OD', path: '/admin/approve-od' },
-          { text: 'Approve OT', path: '/admin/approve-ot' },
+          { text: 'Acknowledge Leave', path: '/admin/approve-leave' },
+          { text: 'Acknowledge OD', path: '/admin/approve-od' },
+          { text: 'Acknowledge OT', path: '/admin/approve-ot' },
+          { text: 'Acknowledge Punch Missed', path: '/admin/approve-punch-missed' },
         ],
       },
     ],
@@ -44,6 +46,7 @@ function Navbar() {
       { text: 'Approve Leaves', path: '/ceo/approve-leaves' },
       { text: 'Approve OD', path: '/ceo/approve-od' },
       { text: 'Approve OT', path: '/ceo/approve-ot' },
+      { text: 'Approve Punch Missed', path: '/ceo/approve-punch-missed' },
     ],
     HOD: [
       { text: 'Dashboard', path: '/hod/dashboard' },
@@ -55,6 +58,7 @@ function Navbar() {
         subItems: [
           { text: 'Apply Leave', path: '/hod/leave' },
           { text: 'Apply OD', path: '/hod/od' },
+          { text: 'Apply Punch Missed', path: '/hod/punch-missed' },
         ],
       },
       {
@@ -62,17 +66,36 @@ function Navbar() {
         subItems: [
           { text: 'Approve Leave', path: '/hod/approve-leave' },
           { text: 'Approve OD', path: '/hod/approve-od' },
-          ...(user?.department?.name && ['Production', 'Testing', 'AMETL', 'Admin'].includes(user.department.name)
+          ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name)
             ? [{ text: 'Approve OT', path: '/hod/approve-ot' }]
             : []),
+          { text: 'Approve Punch Missed', path: '/hod/approve-punch-missed' },
         ],
       },
     ],
     Employee: [
       { text: 'My Dashboard', path: '/employee/employee-dashboard' },
-      { text: 'Apply Leave', path: '/employee/leave' },
-      { text: 'Apply OD', path: '/employee/od' },
-      { text: 'OD List', path: '/employee/od-list' },
+      {
+        text: 'Apply',
+        subItems: [
+          { text: 'Apply Leave', path: '/employee/leave' },
+          { text: 'Apply OD', path: '/employee/od' },
+          { text: 'Apply Punch Missed', path: '/employee/punch-missed' },
+        ],
+      },
+      {
+        text: 'List',
+        subItems: [
+          { text: 'OD List', path: '/employee/od-list' },
+          { text: 'Leave List', path: '/employee/leave-list' },
+          ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name) &&
+          user?.designation && ['Technician', 'Sr. Technician', 'Junior Engineer'].includes(user.designation)
+          ? [{ text: 'OT List', path: '/employee/approve-ot' }]
+          : []),
+          { text: 'Punch Missed List', path: '/employee/punch-missed-list' },
+        ],
+      },
+      { text: 'Attendance', path: '/employee/attendance' },
     ],
   };
 
@@ -377,4 +400,3 @@ function Navbar() {
 }
 
 export default Navbar;
-

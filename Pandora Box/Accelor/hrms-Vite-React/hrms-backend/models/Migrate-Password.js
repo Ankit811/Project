@@ -1,11 +1,11 @@
-import { connect, disconnect } from 'mongoose';
-import { hash } from 'bcrypt';
-import Employee from '../models/Employee';
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const Employee = require('../models/Employee');
 
 async function hashExistingPasswords() {
   try {
     // Connect to MongoDB
-    await connect('mongodb://localhost:27017/hrms', {
+    await mongoose.connect('mongodb://localhost:27017/hrms', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
@@ -18,7 +18,7 @@ async function hashExistingPasswords() {
       // Check if password is not already hashed (bcrypt hashes start with $2b$)
       if (!employee.password.startsWith('$2b$')) {
         console.log(`Hashing password for employee: ${employee.email}`);
-        employee.password = await hash(employee.password, 10);
+        employee.password = await bcrypt.hash(employee.password, 10);
         await employee.save();
         updatedCount++;
       }
@@ -28,8 +28,8 @@ async function hashExistingPasswords() {
   } catch (error) {
     console.error('Error during migration:', error);
   } finally {
-    await disconnect();
+    await mongoose.disconnect();
   }
 }
 
-export default hashExistingPasswords;
+hashExistingPasswords();

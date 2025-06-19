@@ -1,8 +1,8 @@
-
-import Attendance from '../models/Attendance.js';
-import RawPunchlog from '../models/RawPunchlog.js';
-import Leave from '../models/Leave.js';
-import Employee from '../models/Employee.js';
+const mongoose = require('mongoose');
+const Attendance = require('../models/Attendance');
+const RawPunchlog = require('../models/RawPunchlog');
+const Leave = require('../models/Leave');
+const Employee = require('../models/Employee');
 
 async function processLateArrivalsAndAbsents() {
   try {
@@ -104,11 +104,33 @@ async function processLateArrivalsAndAbsents() {
 
         // Calculate OT
         let ot = 0;
-        if (firstPunch !== lastPunch && status === 'Present') {
+        if (firstPunch !== lastPunch) {
           const [inHours, inMinutes] = firstPunch.LogTime.split(':').map(Number);
           const [outHours, outMinutes] = lastPunch.LogTime.split(':').map(Number);
           const duration = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
-          ot = Math.max(0, duration - 510); // 510 minutes = 8 hours 30 minutes
+
+          // Check if yesterday was a Sunday
+          const isSunday = yesterday.getDay() === 0;
+
+          if (isSunday) {
+            // For Sundays, OT is the entire duration
+            ot = duration;
+            status = duration >= 240 ? 'Present' : 'Half Day';
+            halfDay = duration >= 240 ? null : 'First Half';
+          } else {
+            // For non-Sundays, OT is duration beyond 8.5 hours (510 minutes)
+            ot = Math.max(0, duration - 510); // 510 minutes = 8 hours 30 minutes
+            if (duration < 240) {
+              status = 'Half Day';
+              halfDay = 'First Half';
+            } else {
+              status = 'Present';
+            }
+          }
+        } else {
+          status = 'Half Day';
+          halfDay = 'First Half';
+          ot = 0;
         }
 
         // Check for half-day leave to adjust status
@@ -187,7 +209,7 @@ async function processLateArrivalsAndAbsents() {
         }).sort({ LogTime: 1 });
 
         if (todayPunch && todayPunch.LogTime) {
-          const employee = await Employee.findOne ({ userId });
+          const employee = await Employee.findOne({ userId });
           if (!employee) {
             console.warn(`⚠️ No employee found for UserID: ${userId}`);
             continue;
@@ -244,4 +266,4 @@ async function processLateArrivalsAndAbsents() {
   }
 }
 
-export  { processLateArrivalsAndAbsents };
+module.exports = { processLateArrivalsAndAbsents };

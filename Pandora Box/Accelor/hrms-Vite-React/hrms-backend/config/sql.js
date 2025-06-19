@@ -1,10 +1,9 @@
-import pkg from 'mssql';
-const { connect } = pkg;
+const sql = require('mssql');
 
 const sqlConfig = {
   user: process.env.SQL_USER || 'essl',
   password: process.env.SQL_PASSWORD || 'essl',
-  server: '192.168.1.7', // remove instance from here
+  server: '192.168.1.52', // remove instance from here
   database: process.env.SQL_DATABASE || 'etimetracklite1old',
   options: {
     encrypt: false,
@@ -25,27 +24,7 @@ const connectSQL = async () => {
       ...sqlConfig,
       password: '****', // Mask password in logs
     });
-    const pool = await connect(sqlConfig);
-    
-    // Add pool monitoring
-    pool.on('error', (err) => {
-      console.error('SQL Pool error:', {
-        message: err.message,
-        code: err.code,
-        state: err.state,
-        severity: err.severity
-      });
-    });
-
-    pool.on('connect', () => {
-      console.log('SQL Pool stats:', {
-        activeRequests: pool.activeRequests,
-        pendingRequests: pool.pendingRequests,
-        poolSize: pool.poolSize,
-        waitingClients: pool.waitingClients
-      });
-    });
-
+    const pool = await sql.connect(sqlConfig);
     console.log('SQL Server connected to', sqlConfig.server, 'database', sqlConfig.database);
     return pool;
   } catch (err) {
@@ -58,4 +37,4 @@ const connectSQL = async () => {
   }
 };
 
-export  { connectSQL, sqlConfig };
+module.exports = { connectSQL, sql };

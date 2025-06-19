@@ -1,11 +1,11 @@
-import { Schema, model } from 'mongoose';
+const mongoose = require('mongoose');
 
-const leaveSchema = new Schema({
+const leaveSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
-  employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
+  employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   name: { type: String, required: true },
   designation: { type: String, required: true },
-  department: { type: Schema.Types.ObjectId, ref: 'Department', required: true },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
 
   // Updated field to accommodate all types
   leaveType: {
@@ -17,12 +17,11 @@ const leaveSchema = new Schema({
       'Paternity',
       'Compensatory',
       'Restricted Holidays',
-      'Leave Without Pay(LWP)'
+      'Leave Without Pay(LWP)',
+      'Emergency' // Added Emergency leave type
     ],
     required: true
   },
-
-  // Removed category field (no longer needed)
 
   halfDay: {
     time: { type: String, enum: ['forenoon', 'afternoon'] },
@@ -35,13 +34,14 @@ const leaveSchema = new Schema({
   },
 
   reason: { type: String, required: true },
-  chargeGivenTo: { type: String, required: true },
+  chargeGivenTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   emergencyContact: { type: String, required: true },
 
   // Additional fields for specific leave types
-  compensatoryEntryId: { type: Schema.Types.ObjectId, default: null },
+  compensatoryEntryId: { type: mongoose.Schema.Types.ObjectId, default: null },
   projectDetails: { type: String },
   restrictedHoliday: { type: String },
+  medicalCertificate: { type: mongoose.Schema.Types.ObjectId, ref: 'Uploads.files', default: null }, // New field for medical certificate
 
   status: {
     hod: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
@@ -52,4 +52,4 @@ const leaveSchema = new Schema({
   remarks: { type: String, default: 'N/A' }
 }, { timestamps: true });
 
-export default model('Leave', leaveSchema);
+module.exports = mongoose.model('Leave', leaveSchema);

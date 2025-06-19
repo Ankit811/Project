@@ -1,9 +1,8 @@
-import pkg from 'mongoose';
-const { Schema, models, model } = pkg;
+const mongoose = require('mongoose');
 
-const departmentSchema = new Schema({
+const departmentSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
 }, { timestamps: true });
 
 // Check if model is already compiled to prevent redefinition
-export default models.Department || model('Department', departmentSchema);
+module.exports = mongoose.models.Department || mongoose.model('Department', departmentSchema);

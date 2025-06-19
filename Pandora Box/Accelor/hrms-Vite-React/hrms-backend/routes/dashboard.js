@@ -1,14 +1,14 @@
-import { Router } from 'express';
-import { Types } from 'mongoose';
-import Employee from '../models/Employee.js';
-import Attendance from '../models/Attendance.js';
-import Leave from '../models/Leave.js';
-import OTClaim from '../models/OTClaim.js';
-import OD from '../models/OD.js';
-import auth from '../middleware/auth.js';
-import role from '../middleware/role.js';
-import { buildAttendanceData } from '../utils/attendanceUtils.js';
-const router = Router();
+const express = require('express');
+const mongoose = require('mongoose');
+const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const Leave = require('../models/Leave');
+const OT = require('../models/OTClaim');
+const OD = require('../models/OD');
+const Department = require('../models/Department');
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
+const router = express.Router();
 
 // Get dashboard statistics
 router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
@@ -162,7 +162,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
   try {
     const { employeeId } = req.user;
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType paidLeaves restrictedHolidays compensatoryLeaves department')
+      .select('employeeType paidLeaves gender restrictedHolidays compensatoryLeaves department designation canApplyEmergencyLeave')
       .populate('department', 'name');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -177,9 +177,12 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
     res.json({
       employeeType: employee.employeeType,
       paidLeaves: employee.paidLeaves,
+      gender: employee.gender,
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
       department: employee.department,
+      designation: employee.designation, // Added designation
+      canApplyEmergencyLeave:employee.canApplyEmergencyLeave
     });
   } catch (err) {
     console.error('Error fetching employee info:', err);
@@ -216,10 +219,34 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const attendanceRecords = await Attendance.find(attendanceQuery);
 
-    const attendanceData = buildAttendanceData(attendanceRecords, attendanceView, new Date(fromDate), new Date(toDate));
+    let attendanceData = [];
+    if (attendanceView === 'daily') {
+      const date = new Date(fromDate);
+      const count = attendanceRecords.filter(
+        a => new Date(a.logDate).toDateString() === date.toDateString()
+      ).length;
+      attendanceData = [{ name: date.toLocaleDateString(), count }];
+    } else if (attendanceView === 'monthly') {
+      attendanceData = Array.from({ length: endOfMonth.getDate() }, (_, i) => {
+        const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
+        const count = attendanceRecords.filter(
+          a => new Date(a.logDate).toDateString() === date.toDateString()
+        ).length;
+        return { name: `${i + 1}`, count };
+      });
+    } else {
+      attendanceData = Array.from({ length: 12 }, (_, i) => {
+        const month = new Date(today.getFullYear(), i, 1);
+        const count = attendanceRecords.filter(
+          a => new Date(a.logDate).getMonth() === i &&
+              new Date(a.logDate).getFullYear() === today.getFullYear()
+        ).length;
+        return { name: month.toLocaleString('default', { month: 'short' }), count };
+      });
+    }
 
     const employee = await Employee.findOne({ employeeId })
-      .select('employeeType department compensatoryAvailable restrictedHolidays')
+      .select('employeeType department compensatoryAvailable designation')
       .populate('department');
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -315,7 +342,6 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       'status.admin': 'Acknowledged', // Fixed to match Leave schema
       'status.ceo': 'Approved',
     };
-    const restrictedHolidays = employee.restrictedHolidays;
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
     const unpaidLeavesTaken = unpaidLeavesRecords.reduce((total, leave) => {
       if (leave.halfDay && leave.halfDay.date) {
@@ -339,31 +365,31 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       'status.ceo': 'Approved',
       'status.admin': 'Acknowledged', // Fixed to match OTClaim schema
     };
-    const otRecords = await OTClaim.find(otQuery);
+    const otRecords = await OT.find(otQuery);
     const overtimeHours = otRecords.reduce((sum, ot) => sum + (ot.hours || 0), 0);
 
-    const otClaimRecords = await OTClaim.find({ employeeId })
+    const otClaimRecords = await OT.find({ employeeId })
       .sort({ createdAt: -1 })
       .limit(10);
 
     // Fetch unclaimed and claimed OT entries from Attendance for eligible departments
     const eligibleDepartments = ['Production', 'Mechanical', 'AMETL'];
-    const isEligible = employee.department && eligibleDepartments.includes(employee.department.name);
+    const eligibleDesignations = ['Technician', 'Sr. Technician', 'Junior Engineer'];
+    const isEligible = employee.department && eligibleDepartments.includes(employee.department.name) &&
+    eligibleDesignations.includes(employee.designation);
 
     let unclaimedOTRecords = [];
     let claimedOTRecords = [];
 
-    if (isEligible) {
-      // Fetch all attendance records with OT
+    if (isEligible || employee.department) { // Allow non-eligible for Sundays
       const otAttendanceQuery = {
         employeeId,
         logDate: { $gte: new Date(fromDate), $lte: new Date(toDate) },
-        ot: { $gt: 0 }, // OT in minutes
+        ot: { $gt: 0 },
       };
       const otAttendanceRecords = await Attendance.find(otAttendanceQuery).sort({ logDate: -1 });
 
-      // Fetch all OT claims for the employee in the date range
-      const otClaims = await OTClaim.find({
+      const otClaims = await OT.find({
         employeeId,
         date: { $gte: new Date(fromDate), $lte: new Date(toDate) },
       });
@@ -383,14 +409,16 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           return !isClaimed;
         })
         .map((record) => {
-          const deadline = new Date(record.logDate);
-          deadline.setDate(deadline.getDate() + 1);
-          deadline.setHours(23, 59, 59, 999); // 11:59:59 PM of next day
-
+          let deadline = null;
+          if (isEligible) {
+            deadline = new Date(record.logDate);
+            deadline.setDate(deadline.getDate() + 1);
+            deadline.setHours(23, 59, 59, 999);
+          }
           return {
             _id: record._id,
             date: record.logDate,
-            hours: (record.ot / 60).toFixed(1), // Convert minutes to hours
+            hours: (record.ot / 60).toFixed(1),
             day: new Date(record.logDate).toLocaleString('en-US', { weekday: 'long' }),
             claimDeadline: deadline,
           };
@@ -407,7 +435,8 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           ceo: claim.status.ceo,
         },
         projectDetails: claim.projectDetails,
-        claimType: claim.claimType, // Full or Partial
+        paymentAmount: claim.paymentAmount,
+        compensatoryHours: claim.compensatoryHours,
       }));
     }
 
@@ -418,7 +447,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           .map((entry) => ({
             date: entry.date,
             hours: entry.hours,
-            _id: entry._id || new Types.ObjectId().toString(), // Ensure unique ID
+            _id: entry._id || new mongoose.Types.ObjectId().toString(), // Ensure unique ID
           }))
       : [];
 
@@ -427,18 +456,16 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
-    
+
     const stats = {
       attendanceData,
       leaveRecords,
-      leaveDaysTaken,
       unpaidLeavesTaken,
       overtimeHours,
       otClaimRecords,
       unclaimedOTRecords,
       claimedOTRecords,
       compensatoryLeaveEntries,
-      restrictedHolidays,
       odRecords,
     };
 
@@ -450,4 +477,4 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
   }
 });
 
-export default router;
+module.exports = router;

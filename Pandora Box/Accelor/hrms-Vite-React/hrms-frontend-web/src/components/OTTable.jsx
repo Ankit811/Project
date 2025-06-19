@@ -20,16 +20,20 @@ function OTTable({ unclaimedOTRecords, claimedOTRecords, onClaimSuccess }) {
     const updateTimers = () => {
       const newTimers = {};
       unclaimedOTRecords.forEach((record) => {
-        const deadline = new Date(record.claimDeadline);
-        const now = new Date();
-        const timeLeft = deadline - now;
-        //console.log(`Timer for ${record._id}: claimDeadline=${Date.toISOString()}, timeLeft=${timeLeft}ms`);
-        if (timeLeft > 0) {
-          const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-          const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-          newTimers[record._id] = `${hours}h ${minutes}m`;
+        // Assume eligible employee if claimDeadline exists
+        if (record.claimDeadline) {
+          const deadline = new Date(record.claimDeadline);
+          const now = new Date();
+          const timeLeft = deadline - now;
+          if (timeLeft > 0) {
+            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            newTimers[record._id] = `${hours}h ${minutes}m`;
+          } else {
+            newTimers[record._id] = "Expired";
+          }
         } else {
-          newTimers[record._id] = "Expired";
+          newTimers[record._id] = "N/A"; // Non-eligible Sunday OT, no deadline
         }
       });
       setTimers(newTimers);

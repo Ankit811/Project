@@ -1,5 +1,4 @@
-import pkg from 'jsonwebtoken';
-const { verify } = pkg;
+const jwt = require('jsonwebtoken');
 
 const auth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -17,7 +16,7 @@ const auth = (req, res, next) => {
   }
 
   try {
-    const decoded = verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (!decoded.id) {
       return res.status(403).json({ message: 'Invalid token: JWT payload missing id field' });
     }
@@ -38,4 +37,4 @@ const auth = (req, res, next) => {
   }
 };
 
-export default auth;
+module.exports = auth;

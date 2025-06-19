@@ -1,6 +1,6 @@
-import { Schema, model } from 'mongoose';
+const mongoose = require('mongoose');
 
-const attendanceSchema = new Schema({
+const attendanceSchema = new mongoose.Schema({
   employeeId: { type: String, required: true, ref: 'Employee' },
   userId: { type: String, required: true },
   name: { type: String, required: true },
@@ -12,4 +12,7 @@ const attendanceSchema = new Schema({
   ot: { type: Number, default: 0 }, // Overtime in minutes
 }, { timestamps: true });
 
-export default model('Attendance', attendanceSchema);
+// Add unique index to prevent duplicate attendance records for the same employee and date
+attendanceSchema.index({ employeeId: 1, logDate: 1 }, { unique: true });
+
+module.exports = mongoose.model('Attendance', attendanceSchema);

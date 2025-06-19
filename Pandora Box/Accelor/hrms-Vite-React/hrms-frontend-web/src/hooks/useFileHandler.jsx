@@ -32,7 +32,8 @@ export const useFileHandler = (fileId) => {
         URL.revokeObjectURL(fileSrc);
       }
     };
-  }, [fileId, fileSrc]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
 
   // Function to handle "View" action (open file in new tab)
   const handleViewFile = async () => {

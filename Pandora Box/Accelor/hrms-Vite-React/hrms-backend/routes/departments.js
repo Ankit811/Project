@@ -1,10 +1,10 @@
-import { Router } from 'express';
-import Department from '../models/Department.js';
-import Employee from '../models/Employee.js';
-import Audit from '../models/Audit.js';
-import auth from '../middleware/auth.js';
-import role from '../middleware/role.js';
-const router = Router();
+const express = require('express');
+const Department = require('../models/Department');
+const Employee = require('../models/Employee');
+const Audit = require('../models/Audit');
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
+const router = express.Router();
 
 // Get departments based on user role
 router.get('/', auth, async (req, res) => {
@@ -87,4 +87,4 @@ router.delete('/:id', auth, role(['Admin']), async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

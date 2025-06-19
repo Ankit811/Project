@@ -5,11 +5,14 @@ import { Card, CardContent } from '../components/ui/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import api from '../services/api';
 import { useFileHandler } from '../hooks/useFileHandler';
+import { AuthContext } from '../context/AuthContext';
 
-function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
+function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle, onEmployeeUpdate }) {
+  const { user } = React.useContext(AuthContext);
   const [step, setStep] = useState(1);
   const [documentMetadata, setDocumentMetadata] = useState([]);
   const { fileSrc: profilePictureSrc, error: profilePictureError, handleViewFile: handleViewProfilePicture } = useFileHandler(employee.profilePicture);
+  const [canApplyEmergencyLeave, setCanApplyEmergencyLeave] = useState(employee.canApplyEmergencyLeave || false);
 
   // Fetch document metadata
   useEffect(() => {
@@ -25,6 +28,22 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
       fetchDocumentMetadata();
     }
   }, [employee._id]);
+
+  // Debug logging for toggle visibility
+  useEffect(() => {
+    console.log('User data:', {
+      loginType: user?.loginType,
+      role: user?.role,
+      department: user?.department,
+      departmentId: user?.department?._id,
+    });
+    console.log('Employee data:', {
+      loginType: employee?.loginType,
+      department: employee?.department,
+      departmentId: employee?.department?._id,
+      canApplyEmergencyLeave: employee?.canApplyEmergencyLeave,
+    });
+  }, [user, employee]);
 
   const formatDate = (date) => {
     return date ? new Date(date).toISOString().split('T')[0] : 'N/A';
@@ -44,6 +63,40 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
       backgroundVerification: 'Background Verification',
     };
     return docLabels[fieldname] || fieldname;
+  };
+
+  const handleEmergencyLeaveToggle = async () => {
+    try {
+      const response = await api.patch(`/employees/${employee._id}/emergency-leave-permission`);
+      setCanApplyEmergencyLeave(response.data.canApplyEmergencyLeave);
+      // Notify parent component of the update
+      if (onEmployeeUpdate) {
+        onEmployeeUpdate({ ...employee, canApplyEmergencyLeave: response.data.canApplyEmergencyLeave });
+      }
+      alert('Emergency Leave permission updated successfully');
+    } catch (err) {
+      console.error('Error toggling Emergency Leave permission:', err);
+      alert('Failed to update Emergency Leave permission');
+    }
+  };
+
+  // Determine if the toggle should be visible
+  const canShowEmergencyToggle = () => {
+    if (!user || !employee) {
+      return false;
+    }
+    const userDeptId = user.department?._id?.toString();
+    const employeeDeptId = employee.department?._id?.toString();
+    
+    if (user.loginType === 'Admin') return true;
+
+    if (user.loginType === 'HOD' && employee.loginType === 'Employee' && userDeptId && employeeDeptId && userDeptId === employeeDeptId) {
+      return true; // HOD can toggle for Employees in their department
+    }
+    if (user.loginType === 'CEO' && employee.loginType === 'HOD') {
+      return true; // CEO can toggle for HODs
+    }
+    return false;
   };
 
   const renderStep = () => {
@@ -153,6 +206,20 @@ function EmployeeDetails({ employee, onClose, isAdmin, onLockToggle }) {
               <div>
                 <strong>Login Type:</strong> {employee.loginType}
               </div>
+              {canShowEmergencyToggle() && (
+                <div className="col-span-2 flex items-center gap-2">
+                  <label htmlFor="emergency-leave-toggle" className="text-sm font-medium">
+                    Can Apply Emergency Leave
+                  </label>
+                  <input
+                    id="emergency-leave-toggle"
+                    type="checkbox"
+                    checked={canApplyEmergencyLeave}
+                    onChange={handleEmergencyLeaveToggle}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                </div>
+              )}
               {isAdmin && (
                 <div className="col-span-2">
                   <Button

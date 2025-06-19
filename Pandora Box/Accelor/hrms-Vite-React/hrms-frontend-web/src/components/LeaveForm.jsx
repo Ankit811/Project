@@ -27,26 +27,40 @@ function LeaveForm() {
     reason: '',
     chargeGivenTo: '',
     emergencyContact: '',
-    compensatoryEntryId: '', // New field for selected entry
+    compensatoryEntryId: '',
     restrictedHoliday: '',
     projectDetails: '',
     duration: '',
+    medicalCertificate: null,
   });
   const [submitting, setSubmitting] = useState(false);
   const [compensatoryBalance, setCompensatoryBalance] = useState(0);
-  const [compensatoryEntries, setCompensatoryEntries] = useState([]); // New state for entries
+  const [compensatoryEntries, setCompensatoryEntries] = useState([]);
+  const [canApplyEmergencyLeave, setCanApplyEmergencyLeave] = useState(false);
+  const [employees, setEmployees] = useState([]); // New state for employee dropdown
 
   useEffect(() => {
-    const fetchCompensatoryData = async () => {
+    const fetchEmployeeData = async () => {
       try {
         const res = await api.get('/dashboard/employee-info');
+        console.log('Employee Info Response:', res.data); // For debugging
         setCompensatoryBalance(res.data.compensatoryLeaves || 0);
         setCompensatoryEntries(res.data.compensatoryAvailable || []);
+        setCanApplyEmergencyLeave(res.data.canApplyEmergencyLeave || false);
       } catch (err) {
-        console.error('Error fetching compensatory data:', err);
+        console.error('Error fetching employee data:', err);
       }
     };
-    fetchCompensatoryData();
+    const fetchDepartmentEmployees = async () => {
+      try {
+        const res = await api.get('/employees/department');
+        setEmployees(res.data);
+      } catch (err) {
+        console.error('Error fetching department employees:', err);
+      }
+    };
+    fetchEmployeeData();
+    fetchDepartmentEmployees();
   }, []);
 
   const handleChange = e => {
@@ -63,6 +77,19 @@ function LeaveForm() {
         halfDay: { ...prev.halfDay, [name.split('.')[1]]: value },
         fullDay: prev.duration === 'half' ? { from: '', to: '' } : prev.fullDay,
       }));
+    } else if (name === 'medicalCertificate') {
+      const file = e.target.files[0];
+      if (file && file.size > 5 * 1024 * 1024) {
+        alert('File size exceeds 5MB limit');
+        e.target.value = null;
+        return;
+      }
+      if (file && !['image/jpeg', 'image/jpg', 'application/pdf'].includes(file.type)) {
+        alert('Only JPEG/JPG or PDF files are allowed');
+        e.target.value = null;
+        return;
+      }
+      setForm(prev => ({ ...prev, medicalCertificate: file }));
     } else {
       setForm(prev => ({ ...prev, [name]: value }));
     }
@@ -70,6 +97,10 @@ function LeaveForm() {
 
   const handleCompensatoryEntryChange = (value) => {
     setForm(prev => ({ ...prev, compensatoryEntryId: value }));
+  };
+
+  const handleChargeGivenToChange = (value) => {
+    setForm(prev => ({ ...prev, chargeGivenTo: value }));
   };
 
   const calculateLeaveDays = () => {
@@ -87,6 +118,7 @@ function LeaveForm() {
   };
 
   const validateForm = () => {
+    console.log('User Context:', user); // Debug user object
     if (!form.leaveType) return 'Leave Type is required';
     if (!form.reason) return 'Reason is required';
     if (!form.chargeGivenTo) return 'Charge Given To is required';
@@ -106,6 +138,66 @@ function LeaveForm() {
     }
     if (form.fullDay.from && form.fullDay.to && new Date(form.fullDay.to) < new Date(form.fullDay.from)) {
       return 'To Date cannot be earlier than From Date';
+    }
+
+    // Compute today in IST
+    const today = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(today.getTime() + istOffset);
+    istTime.setUTCHours(0, 0, 0, 0); // Midnight IST
+    
+    const sevenDaysAgo = new Date(istTime);
+    sevenDaysAgo.setDate(istTime.getDate() - 7);
+
+    if (form.duration === 'half' && form.halfDay.date && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
+      const halfDayDate = new Date(form.halfDay.date);
+      if (halfDayDate < istTime) {
+        return 'Half Day date cannot be in the past for this leave type';
+      }
+    }
+    if (form.duration === 'full' && form.fullDay.from && form.leaveType !== 'Medical' && form.leaveType !== 'Emergency') {
+      const fromDate = new Date(form.fullDay.from);
+      if (fromDate <= istTime) {
+        return 'From Date must be after today for this leave type';
+      }
+    }
+    if (form.leaveType === 'Medical' && form.duration === 'full' && form.fullDay.from) {
+      const fromDate = new Date(form.fullDay.from);
+      if (fromDate < sevenDaysAgo || fromDate > istTime) {
+        return 'Medical leave From Date must be within today and 7 days prior';
+      }
+    }
+    if (form.leaveType === 'Emergency') {
+      if (!canApplyEmergencyLeave) {
+        return 'You are not authorized to apply for Emergency Leave';
+      }
+      const leaveDays = calculateLeaveDays();
+      if (leaveDays > 1) {
+        return 'Emergency leave must be half day or one full day';
+      }
+      const todayStr = istTime.toISOString().split('T')[0];
+      if (form.duration === 'half' && form.halfDay.date) {
+        const halfDayDateStr = form.halfDay.date;
+        console.log('Emergency Validation (Frontend):', {
+          todayStr,
+          halfDayDateStr
+        });
+        if (halfDayDateStr !== todayStr) {
+          return 'Emergency leave must be for the current date only';
+        }
+      }
+      if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
+        const fromDateStr = form.fullDay.from;
+        const toDateStr = form.fullDay.to;
+        console.log('Emergency Validation (Frontend):', {
+          todayStr,
+          fromDateStr,
+          toDateStr
+        });
+        if (fromDateStr !== todayStr || toDateStr !== todayStr) {
+          return 'Emergency leave must be for the current date only';
+        }
+      }
     }
     if (form.leaveType === 'Compensatory') {
       if (!form.compensatoryEntryId) return 'Compensatory leave entry is required';
@@ -128,8 +220,11 @@ function LeaveForm() {
         return 'Confirmed employees can only take up to 3 consecutive Casual leaves.';
       }
     }
-    if (form.leaveType === 'Medical' && user?.employeeType !== 'Confirmed') {
-      return 'Medical leave is only available for Confirmed employees';
+    if (form.leaveType === 'Medical') {
+      console.log('Validating Medical leave, user:', user, 'employeeType:', user?.employeeType);
+      if (!user || user.employeeType !== 'Confirmed') {
+        return 'Medical leave is only available for Confirmed employees';
+      }
     }
     if (form.leaveType === 'Medical' && form.duration === 'full') {
       const from = new Date(form.fullDay.from);
@@ -138,14 +233,17 @@ function LeaveForm() {
       if (days !== 3 && days !== 4) {
         return 'Medical leave must be exactly 3 or 4 days';
       }
+      if (!form.medicalCertificate) {
+        return 'Medical certificate is required for Medical leave';
+      }
     }
     if (form.leaveType === 'Medical' && form.duration === 'half') {
       return 'Medical leave cannot be applied as a half-day leave';
     }
-    if (form.leaveType === 'Maternity' && user?.gender !== 'Female') {
+    if (form.leaveType === 'Maternity' && (!user || user.gender?.trim().toLowerCase() !== 'female')) {
       return 'Maternity leave is only available for female employees';
     }
-    if (form.leaveType === 'Maternity' && user?.employeeType !== 'Confirmed') {
+    if (form.leaveType === 'Maternity' && (!user || user.employeeType !== 'Confirmed')) {
       return 'Maternity leave is only available for Confirmed employees';
     }
     if (form.leaveType === 'Maternity' && form.duration === 'full') {
@@ -159,10 +257,12 @@ function LeaveForm() {
     if (form.leaveType === 'Maternity' && form.duration === 'half') {
       return 'Maternity leave cannot be applied as a half-day leave';
     }
-    if (form.leaveType === 'Paternity' && user?.gender !== 'Male') {
+    if (form.leaveType === 'Paternity' && (!user || user.gender?.trim().toLowerCase() !== 'male')) {
+      console.log('Paternity Gender Validation:', { gender: user?.gender }); // Debug gender
       return 'Paternity leave is only available for male employees';
     }
-    if (form.leaveType === 'Paternity' && user?.employeeType !== 'Confirmed') {
+    if (form.leaveType === 'Paternity' && (!user || user.employeeType !== 'Confirmed')) {
+      console.log('Paternity Employee Type Validation:', { employeeType: user?.employeeType }); // Debug employeeType
       return 'Paternity leave is only available for Confirmed employees';
     }
     if (form.leaveType === 'Paternity' && form.duration === 'full') {
@@ -188,26 +288,37 @@ function LeaveForm() {
     }
     setSubmitting(true);
     try {
-      const leaveData = {
+      const leaveData = new FormData();
+      leaveData.append('leaveType', form.leaveType);
+      if (form.duration === 'full') {
+        leaveData.append('fullDay[from]', form.fullDay.from || '');
+        leaveData.append('fullDay[to]', form.fullDay.to || '');
+      } else if (form.duration === 'half') {
+        leaveData.append('halfDay[date]', form.halfDay.date || '');
+        leaveData.append('halfDay[session]', form.halfDay.session);
+      }
+      leaveData.append('reason', form.reason);
+      leaveData.append('chargeGivenTo', form.chargeGivenTo);
+      leaveData.append('emergencyContact', form.emergencyContact);
+      if (form.leaveType === 'Compensatory') {
+        leaveData.append('compensatoryEntryId', form.compensatoryEntryId);
+      }
+      leaveData.append('restrictedHoliday', form.restrictedHoliday);
+      leaveData.append('projectDetails', form.projectDetails);
+      leaveData.append('user', user.id);
+      if (form.medicalCertificate) {
+        leaveData.append('medicalCertificate', form.medicalCertificate);
+      }
+      console.log('Submitting FormData:', {
         leaveType: form.leaveType,
-        fullDay: form.duration === 'full' ? {
-          from: form.fullDay.from ? new Date(form.fullDay.from).toISOString() : null,
-          to: form.fullDay.to ? new Date(form.fullDay.to).toISOString() : null,
-        } : null,
-        halfDay: form.duration === 'half' ? {
-          date: form.halfDay.date ? new Date(form.halfDay.date).toISOString() : null,
-          session: form.halfDay.session,
-        } : null,
-        reason: form.reason,
-        chargeGivenTo: form.chargeGivenTo,
-        emergencyContact: form.emergencyContact,
-        compensatoryEntryId: form.leaveType === 'Compensatory' ? form.compensatoryEntryId : null, // Include entry ID
-        restrictedHoliday: form.restrictedHoliday,
-        projectDetails: form.projectDetails,
-        user: user.id,
-      };
-      console.log('Submitting leave:', JSON.stringify(leaveData, null, 2));
-      await api.post('/leaves', leaveData);
+        halfDayDate: form.halfDay.date,
+        fullDayFrom: form.fullDay.from,
+        fullDayTo: form.fullDay.to
+      });
+
+      await api.post('/leaves', leaveData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       alert('Leave submitted successfully');
       setForm({
         leaveType: '',
@@ -220,11 +331,15 @@ function LeaveForm() {
         restrictedHoliday: '',
         projectDetails: '',
         duration: '',
+        medicalCertificate: null
       });
-      // Refresh compensatory data
       const res = await api.get('/dashboard/employee-info');
       setCompensatoryBalance(res.data.compensatoryLeaves || 0);
       setCompensatoryEntries(res.data.compensatoryAvailable || []);
+      setCanApplyEmergencyLeave(res.data.canApplyEmergencyLeave || false);
+      // Refresh employee list after submission
+      const employeeRes = await api.get('/employees/department');
+      setEmployees(employeeRes.data);
     } catch (err) {
       console.error('Leave submit error:', err.response?.data || err.message);
       const errorMessage = err.response?.data?.message || 'An error occurred while submitting the leave';
@@ -233,6 +348,20 @@ function LeaveForm() {
       setSubmitting(false);
     }
   };
+
+  // Compute date constraints in IST
+  const today = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istTime = new Date(today.getTime() + istOffset);
+  istTime.setUTCHours(0, 0, 0, 0); // Midnight IST
+  const sevenDaysAgo = new Date(istTime);
+  sevenDaysAgo.setDate(istTime.getDate() - 7);
+  const tomorrow = new Date(istTime);
+  tomorrow.setDate(istTime.getDate() + 1);
+  const minDateMedical = sevenDaysAgo.toISOString().split('T')[0];
+  const maxDateMedical = istTime.toISOString().split('T')[0];
+  const minDateOther = tomorrow.toISOString().split('T')[0];
+  const currentDate = istTime.toISOString().split('T')[0];
 
   return (
     <ContentLayout title="Apply for Leave">
@@ -256,6 +385,7 @@ function LeaveForm() {
                   <SelectItem value="Compensatory">Compensatory</SelectItem>
                   <SelectItem value="Restricted Holidays">Restricted Holidays</SelectItem>
                   <SelectItem value="Leave Without Pay(LWP)">Leave Without Pay (LWP)</SelectItem>
+                  {canApplyEmergencyLeave && <SelectItem value="Emergency">Emergency</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -368,6 +498,8 @@ function LeaveForm() {
                     type="date"
                     value={form.halfDay.date}
                     onChange={handleChange}
+                    min={form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther}
+                    max={form.leaveType === 'Medical' ? maxDateMedical : form.leaveType === 'Emergency' ? currentDate : ''}
                   />
                 </div>
               </>
@@ -381,6 +513,8 @@ function LeaveForm() {
                     type="date"
                     value={form.fullDay.from}
                     onChange={handleChange}
+                    min={form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther}
+                    max={form.leaveType === 'Medical' ? maxDateMedical : form.leaveType === 'Emergency' ? currentDate : ''}
                   />
                 </div>
                 <div>
@@ -391,9 +525,24 @@ function LeaveForm() {
                     type="date"
                     value={form.fullDay.to}
                     onChange={handleChange}
+                    min={form.fullDay.from || (form.leaveType === 'Medical' ? minDateMedical : form.leaveType === 'Emergency' ? currentDate : minDateOther)}
+                    max={form.leaveType === 'Emergency' ? currentDate : ''}
                   />
                 </div>
               </>
+            )}
+
+            {form.leaveType === 'Medical' && form.duration === 'full' && (
+              <div className="col-span-2">
+                <Label htmlFor="medicalCertificate">Medical Certificate (JPEG/PDF, max 5MB)</Label>
+                <Input
+                  id="medicalCertificate"
+                  name="medicalCertificate"
+                  type="file"
+                  accept="image/jpeg,image/jpg,application/pdf"
+                  onChange={handleChange}
+                />
+              </div>
             )}
 
             <div className="col-span-2">
@@ -415,14 +564,22 @@ function LeaveForm() {
 
             <div>
               <Label htmlFor="chargeGivenTo">Charge Given To</Label>
-              <Input
-                id="chargeGivenTo"
-                name="chargeGivenTo"
-                type="text"
+              <Select
+                onValueChange={handleChargeGivenToChange}
                 value={form.chargeGivenTo}
-                onChange={handleChange}
-                placeholder="Enter charge given to"
-              />
+                disabled={employees.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={employees.length === 0 ? "No available employees" : "Select employee"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(employee => (
+                    <SelectItem key={employee._id} value={employee._id}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
