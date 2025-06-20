@@ -212,7 +212,7 @@ router.get('/department', auth, role(['HOD', 'Employee']), async (req, res) => {
     }
 
     const employees = await Employee.find(query)
-      .select('_id name employeeId')
+      .select('_id name employeeId gender department')
       .populate('department', 'name');
     console.log('Fetching department employees for:', loginType, user.department._id);
     console.log('Employees found:', employees.length);
@@ -659,7 +659,7 @@ router.delete('/:id', auth, role(['Admin']), ensureGfs, async (req, res) => {
         details: `Deleted employee ${employee.employeeId}`,
       });
     } catch (auditErr) {
-      console.warn('Audit deletion failed:', audit.err.message);
+      console.warn('Audit deletion failed:', auditErr.message);
     }
 
     res.status(200).json({ message: 'Employee deleted successfully' });
@@ -918,7 +918,7 @@ router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO
     }
 
     // Authorization checks
-    if (req.user.role === 'HOD' ) {
+    if (req.user.role === 'HOD') {
       // HOD can only toggle for non-HOD employees in their department
       if (employee.loginType !== 'Employee' || employee.department.toString() !== user.department.toString()) {
         return res.status(403).json({ message: 'Not authorized to toggle Emergency Leave permission for this employee' });
@@ -932,6 +932,12 @@ router.patch('/:id/emergency-leave-permission', auth, role(['Admin', 'HOD', 'CEO
 
     // Toggle the canApplyEmergencyLeave field
     employee.canApplyEmergencyLeave = !employee.canApplyEmergencyLeave;
+    // Update lastEmergencyLeaveToggle if toggling to true
+    if (employee.canApplyEmergencyLeave) {
+      employee.lastEmergencyLeaveToggle = new Date();
+    } else {
+      employee.lastEmergencyLeaveToggle = null;
+    }
     const updatedEmployee = await employee.save();
     const populatedEmployee = await Employee.findById(updatedEmployee._id).populate('department reportingManager');
 

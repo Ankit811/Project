@@ -178,7 +178,7 @@ function Dashboard() {
             <Card className="w-48 h-48 flex flex-col items-center justify-center bg-gradient-to-br from-yellow-50 to-yellow-100">
               <CardHeader className="p-2">
                 <CardTitle className="text-lg font-semibold text-yellow-800 text-center">
-                  {user.loginType === 'Admin' ? 'Pending Acknowledgement' : 'Pending Leaves'}
+                  {user.loginType === 'Admin' ? 'Pending Acknowledgement' : 'Pending Approvals'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-2">

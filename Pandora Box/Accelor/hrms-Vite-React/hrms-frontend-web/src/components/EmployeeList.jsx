@@ -155,9 +155,26 @@ function EmployeeList() {
     }
   };
 
-  const handleViewDetails = (employee) => {
-    setSelectedEmployeeForDetails(employee);
-    setShowDetails(true);
+  const handleViewDetails = async (employee) => {
+    try {
+      let fullEmployee = employee;
+      // For HOD, fetch full employee details
+      if (loginType === 'HOD') {
+        const response = await api.get(`/employees/${employee._id}`);
+        fullEmployee = response.data;
+        console.log('Full employee details fetched for HOD:', {
+          employeeId: fullEmployee.employeeId,
+          name: fullEmployee.name,
+          department: fullEmployee.department,
+          loginType: fullEmployee.loginType,
+        });
+      }
+      setSelectedEmployeeForDetails(fullEmployee);
+      setShowDetails(true);
+    } catch (err) {
+      console.error('Error fetching full employee details:', err.response?.data || err.message);
+      setError('Failed to load employee details. Please try again.');
+    }
   };
 
   const handleCloseDetailsModal = () => {

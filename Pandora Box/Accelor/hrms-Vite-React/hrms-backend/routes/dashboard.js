@@ -6,6 +6,7 @@ const Leave = require('../models/Leave');
 const OT = require('../models/OTClaim');
 const OD = require('../models/OD');
 const Department = require('../models/Department');
+const PunchMissed = require('../models/PunchMissed');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
@@ -93,8 +94,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       throw new Error('Failed to count attendance');
     }
 
-    let leaveMatch = {};
-    let pendingLeaves;
+    let pendingApprovals = 0;
     try {
       if (loginType === 'Admin') {
         let adminEmployeeIds = [];
@@ -106,16 +106,42 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
           console.error('Error fetching Admin employees:', empError.stack);
           throw new Error('Failed to fetch Admin employee IDs');
         }
-        leaveMatch = {
+        const adminMatch = {
           'status.ceo': 'Approved',
           'status.admin': 'Pending',
-          employee: { $nin: adminEmployeeIds }
+          employee: { $nin: adminEmployeeIds },
         };
+        const adminPunchMissedMatch = {
+          'status.hod': 'Approved',
+          'status.admin': 'Pending',
+          employee: { $nin: adminEmployeeIds },
+        };
+        const [leaveCount, odCount, otCount, punchMissedCount] = await Promise.all([
+          Leave.countDocuments(adminMatch),
+          OD.countDocuments(adminMatch),
+          OT.countDocuments(adminMatch),
+          PunchMissed.countDocuments(adminPunchMissedMatch),
+        ]);
+        pendingApprovals = leaveCount + odCount + otCount + punchMissedCount;
+        console.log(`Admin pending counts: Leaves=${leaveCount}, ODs=${odCount}, OTs=${otCount}, PunchMissed=${punchMissedCount}`);
       } else if (loginType === 'CEO') {
-        leaveMatch = {
+        const ceoMatch = {
           'status.hod': 'Approved',
           'status.ceo': 'Pending',
         };
+        const ceoPunchMissedMatch = {
+          'status.hod': 'Approved',
+          'status.admin': 'Approved',
+          'status.ceo': 'Pending',
+        };
+        const [leaveCount, odCount, otCount, punchMissedCount] = await Promise.all([
+          Leave.countDocuments(ceoMatch),
+          OD.countDocuments(ceoMatch),
+          OT.countDocuments(ceoMatch),
+          PunchMissed.countDocuments(ceoPunchMissedMatch),
+        ]);
+        pendingApprovals = leaveCount + odCount + otCount + punchMissedCount;
+        console.log(`CEO pending counts: Leaves=${leaveCount}, ODs=${odCount}, OTs=${otCount}, PunchMissed=${punchMissedCount}`);
       } else if (loginType === 'HOD') {
         let hodAdminEmployeeIds = [];
         try {
@@ -126,18 +152,24 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
           console.error('Error fetching HOD/Admin employees:', empError.stack);
           throw new Error('Failed to fetch HOD/Admin employee IDs');
         }
-        leaveMatch = {
+        const hodMatch = {
           'status.hod': 'Pending',
-          department: departmentId, // Fixed field name to match Leave schema
-          employee: { $nin: hodAdminEmployeeIds }
+          department: departmentId,
+          employee: { $nin: hodAdminEmployeeIds },
         };
-        console.log(`HOD leaveMatch query: ${JSON.stringify(leaveMatch)}`);
+        const [leaveCount, odCount, otCount, punchMissedCount] = await Promise.all([
+          Leave.countDocuments(hodMatch),
+          OD.countDocuments(hodMatch),
+          OT.countDocuments(hodMatch),
+          PunchMissed.countDocuments(hodMatch),
+        ]);
+        pendingApprovals = leaveCount + odCount + otCount + punchMissedCount;
+        console.log(`HOD pending counts: Leaves=${leaveCount}, ODs=${odCount}, OTs=${otCount}, PunchMissed=${punchMissedCount}`);
       }
-      pendingLeaves = await Leave.countDocuments(leaveMatch);
-      console.log(`Pending leaves for ${loginType}: ${pendingLeaves}`);
-    } catch (leaveError) {
-      console.error('Leave count error:', leaveError.stack);
-      throw new Error('Failed to count pending leaves');
+      console.log(`Pending approvals for ${loginType}: ${pendingApprovals}`);
+    } catch (approvalError) {
+      console.error('Approval count error:', approvalError.stack);
+      throw new Error('Failed to count pending approvals');
     }
 
     const stats = {
@@ -146,7 +178,7 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       contractualEmployees: employeeCounts.Contractual,
       internEmployees: employeeCounts.Intern,
       presentToday,
-      pendingLeaves,
+      pendingLeaves: pendingApprovals,
     };
 
     console.log(`Dashboard stats for ${loginType}:`, stats);
@@ -181,7 +213,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
       restrictedHolidays: employee.restrictedHolidays,
       compensatoryLeaves: employee.compensatoryLeaves,
       department: employee.department,
-      designation: employee.designation, // Added designation
+      designation: employee.designation,
       canApplyEmergencyLeave:employee.canApplyEmergencyLeave
     });
   } catch (err) {
@@ -264,7 +296,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
         employeeId,
         leaveType: { $in: ['Casual', 'Medical', 'Maternity', 'Paternity'] },
         'status.hod': 'Approved',
-        'status.admin': 'Acknowledged', // Fixed to match Leave schema
+        'status.admin': 'Acknowledged',
         'status.ceo': 'Approved',
       };
       const leavesThisMonth = await Leave.find({
@@ -293,7 +325,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
         if (leave.halfDay && leave.halfDay.date) {
           if (leave.fullDay && (leave.fullDay.from || leave.fullDay.to)) {
             console.warn(`Leave ${leave._id} has both halfDay and fullDay for ${employeeId}`);
-            return 0.5; // Prioritize half-day
+            return 0.5;
           }
           console.log(`Leave ${leave._id}: 0.5 days (half-day)`);
           return 0.5;
@@ -339,7 +371,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
         { 'halfDay.date': { $gte: startOfMonth, $lte: endOfMonth } },
       ],
       'status.hod': 'Approved',
-      'status.admin': 'Acknowledged', // Fixed to match Leave schema
+      'status.admin': 'Acknowledged',
       'status.ceo': 'Approved',
     };
     const unpaidLeavesRecords = await Leave.find(unpaidLeavesQuery);
@@ -363,7 +395,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
       employeeId,
       date: { $gte: startOfMonth, $lte: endOfMonth },
       'status.ceo': 'Approved',
-      'status.admin': 'Acknowledged', // Fixed to match OTClaim schema
+      'status.admin': 'Acknowledged',
     };
     const otRecords = await OT.find(otQuery);
     const overtimeHours = otRecords.reduce((sum, ot) => sum + (ot.hours || 0), 0);
@@ -381,7 +413,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     let unclaimedOTRecords = [];
     let claimedOTRecords = [];
 
-    if (isEligible || employee.department) { // Allow non-eligible for Sundays
+    if (isEligible || employee.department) {
       const otAttendanceQuery = {
         employeeId,
         logDate: { $gte: new Date(fromDate), $lte: new Date(toDate) },
@@ -447,7 +479,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
           .map((entry) => ({
             date: entry.date,
             hours: entry.hours,
-            _id: entry._id || new mongoose.Types.ObjectId().toString(), // Ensure unique ID
+            _id: entry._id || new mongoose.Types.ObjectId().toString(),
           }))
       : [];
 

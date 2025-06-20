@@ -100,7 +100,8 @@ const employeeSchema = new mongoose.Schema({
   lastLeaveReset: { type: Date }, // For Casual leaves
   lastMedicalReset: { type: Date }, // For Medical leaves
   lastRestrictedHolidayReset: { type: Date }, // For Restricted Holiday
-  canApplyEmergencyLeave: { type: Boolean, default: false }, // Added field for Emergency Leave permission
+  canApplyEmergencyLeave: { type: Boolean, default: false }, // Permission for Emergency Leave
+  lastEmergencyLeaveToggle: { type: Date }, // Tracks when canApplyEmergencyLeave was last set to true
   lastPunchMissedSubmission: { type: Date }, // Tracks last Punch Missed Form submission
   attendanceHistory: [{ // New field for attendance history
     date: { type: Date, required: true },
@@ -118,11 +119,33 @@ employeeSchema.pre('save', async function(next) {
   next();
 });
 
-// Middleware to handle leave allocation, reset, over and above leave adjustment, and Probation-to-Confirmed transition
+// Middleware to handle leave allocation, reset, over and above leave adjustment, Probation-to-Confirmed transition, and Emergency Leave auto-reset
 employeeSchema.pre('save', async function(next) {
   const today = new Date();
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
+
+  // Normalize today's date to start of day for comparison
+  today.setHours(0, 0, 0, 0);
+
+  // Handle Emergency Leave auto-reset
+  if (this.canApplyEmergencyLeave && this.lastEmergencyLeaveToggle) {
+    const toggleDate = new Date(this.lastEmergencyLeaveToggle);
+    toggleDate.setHours(0, 0, 0, 0);
+    if (today > toggleDate) {
+      this.canApplyEmergencyLeave = false;
+      this.lastEmergencyLeaveToggle = null;
+      try {
+        await Audit.create({
+          action: 'auto_reset_emergency_leave',
+          user: 'system',
+          details: `Auto-reset Emergency Leave permission for employee ${this.employeeId} to false`,
+        });
+      } catch (auditErr) {
+        console.warn('Audit logging for Emergency Leave auto-reset failed:', auditErr.message);
+      }
+    }
+  }
 
   // Handle Probation to Confirmed transition
   if (!this.isNew && this.employeeType === 'Probation' && this.confirmationDate) {

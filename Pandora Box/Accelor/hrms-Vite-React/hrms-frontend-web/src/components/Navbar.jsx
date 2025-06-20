@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useContext } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Transition } from '@headlessui/react';
-import Notification from './Notification';
-import { AuthContext } from '../context/AuthContext';
-import logo from '../assets/logo.png';
-import io from 'socket.io-client';
-import { Menu as MenuIcon, ChevronDown } from 'lucide-react';
+import React, { useEffect, useRef, useContext } from "react";
+import { motion } from "framer-motion";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Menu, Transition } from "@headlessui/react";
+import Notification from "./Notification";
+import { AuthContext } from "../context/AuthContext";
+import logo from "../assets/logo.png";
+import io from "socket.io-client";
+import { Menu as MenuIcon, ChevronDown } from "lucide-react";
 
 function Navbar() {
   const { user, logout, loading } = useContext(AuthContext);
@@ -17,97 +17,98 @@ function Navbar() {
   // Define menu items with categorized Apply and Approve dropdowns for Admin and HOD
   const menuItems = {
     Admin: [
-      { text: 'Dashboard', path: '/admin/dashboard' },
-      { text: 'My Dashboard', path: '/admin/employee-dashboard' },
-      { text: 'Employees', path: '/admin/employees' },
-      { text: 'Add Employee', path: '/admin/add-employee' },
-      { text: 'Attendance', path: '/admin/attendance' },
+      { text: "Dashboard", path: "/admin/dashboard" },
+      { text: "Employees", path: "/admin/employees" },
+      { text: "Add Employee", path: "/admin/add-employee" },
+      { text: "Attendance", path: "/admin/attendance" },
       {
-        text: 'Apply',
+        text: "Acknowledge",
         subItems: [
-          { text: 'Apply Leave', path: '/admin/leave' },
-          { text: 'Apply OD', path: '/admin/od' },
-          { text: 'Apply Punch Missed', path: '/admin/punch-missed' },
-        ],
-      },
-      {
-        text: 'Acknowledge',
-        subItems: [
-          { text: 'Acknowledge Leave', path: '/admin/approve-leave' },
-          { text: 'Acknowledge OD', path: '/admin/approve-od' },
-          { text: 'Acknowledge OT', path: '/admin/approve-ot' },
-          { text: 'Acknowledge Punch Missed', path: '/admin/approve-punch-missed' },
+          { text: "Acknowledge Leave", path: "/admin/approve-leave" },
+          { text: "Acknowledge OD", path: "/admin/approve-od" },
+          { text: "Acknowledge OT", path: "/admin/approve-ot" },
+          {
+            text: "Acknowledge Punch Missed",
+            path: "/admin/approve-punch-missed",
+          },
         ],
       },
     ],
     CEO: [
-      { text: 'Dashboard', path: '/ceo/dashboard' },
-      { text: 'Employees', path: '/ceo/employees' },
-      { text: 'Approve Leaves', path: '/ceo/approve-leaves' },
-      { text: 'Approve OD', path: '/ceo/approve-od' },
-      { text: 'Approve OT', path: '/ceo/approve-ot' },
-      { text: 'Approve Punch Missed', path: '/ceo/approve-punch-missed' },
+      { text: "Dashboard", path: "/ceo/dashboard" },
+      { text: "Employees", path: "/ceo/employees" },
+      { text: "Approve Leaves", path: "/ceo/approve-leaves" },
+      { text: "Approve OD", path: "/ceo/approve-od" },
+      { text: "Approve OT", path: "/ceo/approve-ot" },
+      { text: "Approve Punch Missed", path: "/ceo/approve-punch-missed" },
     ],
     HOD: [
-      { text: 'Dashboard', path: '/hod/dashboard' },
-      { text: 'My Dashboard', path: '/hod/employee-dashboard' },
-      { text: 'Employees', path: '/hod/employees' },
-      { text: 'Attendance', path: '/hod/attendance' },
+      { text: "Dashboard", path: "/hod/dashboard" },
+      { text: "My Dashboard", path: "/hod/employee-dashboard" },
+      { text: "Employees", path: "/hod/employees" },
+      { text: "Attendance", path: "/hod/attendance" },
       {
-        text: 'Apply',
+        text: "Apply",
         subItems: [
-          { text: 'Apply Leave', path: '/hod/leave' },
-          { text: 'Apply OD', path: '/hod/od' },
-          { text: 'Apply Punch Missed', path: '/hod/punch-missed' },
+          { text: "Apply Leave", path: "/hod/leave" },
+          { text: "Apply OD", path: "/hod/od" },
+          { text: "Apply Punch Missed", path: "/hod/punch-missed" },
         ],
       },
       {
-        text: 'Approve',
+        text: "Approve",
         subItems: [
-          { text: 'Approve Leave', path: '/hod/approve-leave' },
-          { text: 'Approve OD', path: '/hod/approve-od' },
-          ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name)
-            ? [{ text: 'Approve OT', path: '/hod/approve-ot' }]
+          { text: "Approve Leave", path: "/hod/approve-leave" },
+          { text: "Approve OD", path: "/hod/approve-od" },
+          ...(user?.department?.name &&
+          ["Production", "Mechanical", "AMETL"].includes(user.department.name)
+            ? [{ text: "Approve OT", path: "/hod/approve-ot" }]
             : []),
-          { text: 'Approve Punch Missed', path: '/hod/approve-punch-missed' },
+          { text: "Approve Punch Missed", path: "/hod/approve-punch-missed" },
         ],
       },
     ],
     Employee: [
-      { text: 'My Dashboard', path: '/employee/employee-dashboard' },
+      { text: "My Dashboard", path: "/employee/employee-dashboard" },
       {
-        text: 'Apply',
+        text: "Apply",
         subItems: [
-          { text: 'Apply Leave', path: '/employee/leave' },
-          { text: 'Apply OD', path: '/employee/od' },
-          { text: 'Apply Punch Missed', path: '/employee/punch-missed' },
+          { text: "Apply Leave", path: "/employee/leave" },
+          { text: "Apply OD", path: "/employee/od" },
+          { text: "Apply Punch Missed", path: "/employee/punch-missed" },
         ],
       },
       {
-        text: 'List',
+        text: "List",
         subItems: [
-          { text: 'OD List', path: '/employee/od-list' },
-          { text: 'Leave List', path: '/employee/leave-list' },
-          ...(user?.department?.name && ['Production', 'Mechanical', 'AMETL'].includes(user.department.name) &&
-          user?.designation && ['Technician', 'Sr. Technician', 'Junior Engineer'].includes(user.designation)
-          ? [{ text: 'OT List', path: '/employee/approve-ot' }]
-          : []),
-          { text: 'Punch Missed List', path: '/employee/punch-missed-list' },
+          { text: "OD List", path: "/employee/od-list" },
+          { text: "Leave List", path: "/employee/leave-list" },
+          ...(user?.department?.name &&
+          ["Production", "Mechanical", "AMETL"].includes(
+            user.department.name
+          ) &&
+          user?.designation &&
+          ["Technician", "Sr. Technician", "Junior Engineer"].includes(
+            user.designation
+          )
+            ? [{ text: "OT List", path: "/employee/approve-ot" }]
+            : []),
+          { text: "Punch Missed List", path: "/employee/punch-missed-list" },
         ],
       },
-      { text: 'Attendance', path: '/employee/attendance' },
+      { text: "Attendance", path: "/employee/attendance" },
     ],
   };
 
   const handleLogoClick = () => {
     if (!user) return;
     const defaultPaths = {
-      Admin: '/admin/dashboard',
-      CEO: '/ceo/dashboard',
-      HOD: '/hod/dashboard',
-      Employee: '/employee/employee-dashboard',
+      Admin: "/admin/dashboard",
+      CEO: "/ceo/dashboard",
+      HOD: "/hod/dashboard",
+      Employee: "/employee/employee-dashboard",
     };
-    navigate(defaultPaths[user?.loginType] || '/');
+    navigate(defaultPaths[user?.loginType] || "/");
   };
 
   const handleNavigation = (item, subItem = null) => {
@@ -119,22 +120,24 @@ function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   useEffect(() => {
     if (!socketRef.current) {
-      socketRef.current = io('http://localhost:5000', { withCredentials: true });
+      socketRef.current = io("http://localhost:5000", {
+        withCredentials: true,
+      });
     }
 
     const socket = socketRef.current;
 
     if (user?.employeeId) {
-      socket.emit('join', user.employeeId);
+      socket.emit("join", user.employeeId);
     }
 
-    socket.on('notification', (data) => {
-      alert('🔔 New Notification: ' + data.message);
+    socket.on("notification", (data) => {
+      alert("🔔 New Notification: " + data.message);
     });
 
     return () => {
@@ -143,14 +146,14 @@ function Navbar() {
     };
   }, [user]);
 
-  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'G';
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || "G";
 
   if (loading) {
     return (
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 120 }}
+        transition={{ type: "spring", stiffness: 120 }}
         className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
       >
         <div className="flex items-center justify-between h-full px-4 md:px-6">
@@ -173,7 +176,7 @@ function Navbar() {
     <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      transition={{ type: 'spring', stiffness: 120 }}
+      transition={{ type: "spring", stiffness: 120 }}
       className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-background to-muted shadow-lg z-50 rounded-md"
     >
       <div className="flex items-center justify-between h-full px-4 md:px-6">
@@ -197,9 +200,11 @@ function Navbar() {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 flex items-center space-x-1 ${
-                          item.subItems.some((subItem) => location.pathname === subItem.path)
-                            ? 'bg-muted text-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          item.subItems.some(
+                            (subItem) => location.pathname === subItem.path
+                          )
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                         aria-label={`Open ${item.text} dropdown`}
                       >
@@ -222,12 +227,14 @@ function Navbar() {
                                 <div
                                   className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
                                     location.pathname === subItem.path
-                                      ? 'bg-muted font-semibold text-foreground'
+                                      ? "bg-muted font-semibold text-foreground"
                                       : active
-                                      ? 'bg-muted text-foreground'
-                                      : 'text-foreground'
+                                      ? "bg-muted text-foreground"
+                                      : "text-foreground"
                                   }`}
-                                  onClick={() => handleNavigation(item, subItem)}
+                                  onClick={() =>
+                                    handleNavigation(item, subItem)
+                                  }
                                   aria-label={subItem.text}
                                 >
                                   {subItem.text}
@@ -244,8 +251,8 @@ function Navbar() {
                       whileTap={{ scale: 0.95 }}
                       className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-200 ${
                         location.pathname === item.path
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                       onClick={() => handleNavigation(item)}
                       aria-label={item.text}
@@ -292,12 +299,14 @@ function Navbar() {
                                   <div
                                     className={`pl-6 py-2 text-sm cursor-pointer transition-colors duration-200 ${
                                       location.pathname === subItem.path
-                                        ? 'bg-muted font-semibold text-foreground'
+                                        ? "bg-muted font-semibold text-foreground"
                                         : active
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-foreground'
+                                        ? "bg-muted text-foreground"
+                                        : "text-foreground"
                                     }`}
-                                    onClick={() => handleNavigation(item, subItem)}
+                                    onClick={() =>
+                                      handleNavigation(item, subItem)
+                                    }
                                     aria-label={subItem.text}
                                   >
                                     {subItem.text}
@@ -312,10 +321,10 @@ function Navbar() {
                               <div
                                 className={`px-4 py-2 text-sm cursor-pointer transition-colors duration-200 ${
                                   location.pathname === item.path
-                                    ? 'bg-muted font-semibold text-foreground'
+                                    ? "bg-muted font-semibold text-foreground"
                                     : active
-                                    ? 'bg-muted text-foreground'
-                                    : 'text-foreground'
+                                    ? "bg-muted text-foreground"
+                                    : "text-foreground"
                                 }`}
                                 onClick={() => handleNavigation(item)}
                                 aria-label={item.text}
@@ -358,27 +367,37 @@ function Navbar() {
               >
                 <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-popover rounded-lg shadow-xl p-2 z-50 border">
                   <div className="px-4 py-2 border-b border-border">
-                    <p className="text-sm font-medium text-foreground">{user.name || 'Guest'}</p>
-                    <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {user.name || "Guest"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {user.email || "No email"}
+                    </p>
                   </div>
+                  {user.role !== "Admin" && (
+                    <Menu.Item>
+                      {({ active }) => (
+                        <div
+                          className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
+                            active ? "bg-gray-200" : ""
+                          }`}
+                          onClick={() =>
+                            navigate(
+                              `/${user?.loginType.toLowerCase()}/profile`
+                            )
+                          }
+                          aria-label="View profile"
+                        >
+                          Profile
+                        </div>
+                      )}
+                    </Menu.Item>
+                  )}
                   <Menu.Item>
                     {({ active }) => (
                       <div
                         className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-gray-200' : ''
-                        }`}
-                        onClick={() => navigate(`/${user?.loginType.toLowerCase()}/profile`)}
-                        aria-label="View profile"
-                      >
-                        Profile
-                      </div>
-                    )}
-                  </Menu.Item>
-                  <Menu.Item>
-                    {({ active }) => (
-                      <div
-                        className={`px-4 py-2 text-sm text-foreground cursor-pointer transition-colors duration-200 ${
-                          active ? 'bg-gray-200' : ''
+                          active ? "bg-gray-200" : ""
                         }`}
                         onClick={handleLogout}
                         aria-label="Logout"

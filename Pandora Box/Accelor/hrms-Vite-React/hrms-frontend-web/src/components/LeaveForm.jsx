@@ -37,13 +37,14 @@ function LeaveForm() {
   const [compensatoryBalance, setCompensatoryBalance] = useState(0);
   const [compensatoryEntries, setCompensatoryEntries] = useState([]);
   const [canApplyEmergencyLeave, setCanApplyEmergencyLeave] = useState(false);
-  const [employees, setEmployees] = useState([]); // New state for employee dropdown
+  const [employees, setEmployees] = useState([]);
 
+  // Fetch employee data and department employees
   useEffect(() => {
     const fetchEmployeeData = async () => {
       try {
         const res = await api.get('/dashboard/employee-info');
-        console.log('Employee Info Response:', res.data); // For debugging
+        console.log('Employee Info Response:', res.data);
         setCompensatoryBalance(res.data.compensatoryLeaves || 0);
         setCompensatoryEntries(res.data.compensatoryAvailable || []);
         setCanApplyEmergencyLeave(res.data.canApplyEmergencyLeave || false);
@@ -51,17 +52,27 @@ function LeaveForm() {
         console.error('Error fetching employee data:', err);
       }
     };
+
     const fetchDepartmentEmployees = async () => {
       try {
-        const res = await api.get('/employees/department');
+        const params = {};
+        if (form.duration === 'full' && form.fullDay.from && form.fullDay.to) {
+          params.startDate = form.fullDay.from;
+          params.endDate = form.fullDay.to;
+        } else if (form.duration === 'half' && form.halfDay.date) {
+          params.startDate = form.halfDay.date;
+          params.endDate = form.halfDay.date;
+        }
+        const res = await api.get('/employees/department', { params });
         setEmployees(res.data);
       } catch (err) {
         console.error('Error fetching department employees:', err);
       }
     };
+
     fetchEmployeeData();
     fetchDepartmentEmployees();
-  }, []);
+  }, [form.duration, form.fullDay.from, form.fullDay.to, form.halfDay.date]);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -118,7 +129,7 @@ function LeaveForm() {
   };
 
   const validateForm = () => {
-    console.log('User Context:', user); // Debug user object
+    console.log('User Context:', user);
     if (!form.leaveType) return 'Leave Type is required';
     if (!form.reason) return 'Reason is required';
     if (!form.chargeGivenTo) return 'Charge Given To is required';
@@ -258,11 +269,11 @@ function LeaveForm() {
       return 'Maternity leave cannot be applied as a half-day leave';
     }
     if (form.leaveType === 'Paternity' && (!user || user.gender?.trim().toLowerCase() !== 'male')) {
-      console.log('Paternity Gender Validation:', { gender: user?.gender }); // Debug gender
+      console.log('Paternity Gender Validation:', { gender: user?.gender });
       return 'Paternity leave is only available for male employees';
     }
     if (form.leaveType === 'Paternity' && (!user || user.employeeType !== 'Confirmed')) {
-      console.log('Paternity Employee Type Validation:', { employeeType: user?.employeeType }); // Debug employeeType
+      console.log('Paternity Employee Type Validation:', { employeeType: user?.employeeType });
       return 'Paternity leave is only available for Confirmed employees';
     }
     if (form.leaveType === 'Paternity' && form.duration === 'full') {

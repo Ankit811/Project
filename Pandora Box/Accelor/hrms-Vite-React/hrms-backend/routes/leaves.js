@@ -103,6 +103,41 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
       return res.status(400).json({ message: 'Either halfDay or fullDay dates are required' });
     }
 
+    // Check if user is assigned as Charge Given To for any non-rejected leaves overlapping with the requested period (except for Emergency leave)
+    if (req.body.leaveType !== 'Emergency') {
+      const overlappingChargeAssignments = await Leave.find({
+        chargeGivenTo: user._id,
+        $or: [
+          {
+            'fullDay.from': { $lte: leaveEnd },
+            'fullDay.to': { $gte: leaveStart },
+            $and: [
+              { 'status.hod': { $ne: 'Rejected' } },
+              { 'status.ceo': { $ne: 'Rejected' } },
+              { 'status.admin': { $in: ['Pending', 'Acknowledged'] } }
+            ]
+          },
+          {
+            'halfDay.date': { $gte: leaveStart, $lte: leaveEnd },
+            $and: [
+              { 'status.hod': { $ne: 'Rejected' } },
+              { 'status.ceo': { $ne: 'Rejected' } },
+              { 'status.admin': { $in: ['Pending', 'Acknowledged'] } }
+            ]
+          }
+        ]
+      });
+      if (overlappingChargeAssignments.length > 0) {
+        const leaveDetails = overlappingChargeAssignments[0];
+        const dateRangeStr = leaveDetails.halfDay?.date
+          ? `on ${new Date(leaveDetails.halfDay.date).toISOString().split('T')[0]}`
+          : `from ${new Date(leaveDetails.fullDay.from).toISOString().split('T')[0]} to ${new Date(leaveDetails.fullDay.to).toISOString().split('T')[0]}`;
+        return res.status(400).json({
+          message: `You are assigned as Charge Given To for a leave ${dateRangeStr} and cannot apply for non-Emergency leaves during this period.`
+        });
+      }
+    }
+
     const leaveType = req.body.leaveType;
     const isConfirmed = user.employeeType === 'Confirmed';
     const joinDate = new Date(user.dateOfJoining);
@@ -286,11 +321,11 @@ router.post('/', auth, role(['Employee', 'HOD', 'Admin']), upload.single('medica
       : `from ${req.body.fullDay.from} to ${req.body.fullDay.to}`;
     await Notification.create({
       userId: chargeGivenToEmployee.employeeId,
-      message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}`
+      message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}. You cannot apply for non-Emergency leaves during this period until the leave is rejected.`
     });
     if (global._io) {
       global._io.to(chargeGivenToEmployee.employeeId).emit('notification', {
-        message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}`
+        message: `You have been assigned as Charge Given To for ${user.name}'s leave ${dateRangeStr}. You cannot apply for non-Emergency leaves during this period until the leave is rejected.`
       });
     }
 
@@ -486,9 +521,11 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       if (ceo) {
         await Notification.create({
           userId: ceo.employeeId,
-          message: `Leave request from ${leave.name} awaiting your approval`,
+          message: `Leave request from ${leave.name} awaiting your approval`
         });
-        if (global._io) global._io.to(ceo.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your approval` });
+        if (global._io) {
+          global._io.to(ceo.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your approval` });
+        }
       }
     }
 
@@ -498,9 +535,11 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       if (admin) {
         await Notification.create({
           userId: admin.employeeId,
-          message: `Leave request from ${leave.name} awaiting your acknowledgment`,
+          message: `Leave request from ${leave.name} awaiting your acknowledgment`
         });
-        if (global._io) global._io.to(admin.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your acknowledgment` });
+        if (global._io) {
+          global._io.to(admin.employeeId).emit('notification', { message: `Leave request from ${leave.name} awaiting your acknowledgment` });
+        }
       }
     }
 
@@ -574,24 +613,24 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
       // Notify the employee who submitted the leave
       await Notification.create({
         userId: leave.employee.employeeId,
-        message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`,
+        message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`
       });
       if (global._io) {
-        global._io.to(leave.employee.employeeId).emit('notification', {message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}`});
+        global._io.to(leave.employee.employeeId).emit('notification', { message: `Your ${leave.leaveType} leave request was rejected by ${currentStage.toUpperCase()}` });
       }
 
       // Notify the chargeGivenTo employee that they are no longer assigned
       if (leave.chargeGivenTo) {
         const dateRangeStr = leave.halfDay?.date
-          ? `on ${leave.halfDay.date} (${leave.halfDay.session})`
-          : `from ${leave.fullDay.from} to ${leave.fullDay.to}`;
+          ? `on ${new Date(leave.halfDay.date).toISOString().split('T')[0]} (${leave.halfDay.session})`
+          : `from ${new Date(leave.fullDay.from).toISOString().split('T')[0]} to ${new Date(leave.fullDay.to).toISOString().split('T')[0]}`;
         await Notification.create({
           userId: leave.chargeGivenTo.employeeId,
-          message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}`,
+          message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}. You can now apply for non-Emergency leaves during this period.`
         });
         if (global._io) {
           global._io.to(leave.chargeGivenTo.employeeId).emit('notification', {
-            message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}`
+            message: `You are no longer assigned as Charge Given To for ${leave.name}'s leave ${dateRangeStr} due to rejection by ${currentStage.toUpperCase()}. You can now apply for non-Emergency leaves during this period.`
           });
         }
       }
