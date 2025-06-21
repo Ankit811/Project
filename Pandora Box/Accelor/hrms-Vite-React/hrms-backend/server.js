@@ -63,6 +63,7 @@ import notificationRoutes from './routes/notifications.js';
 import otRouter from './routes/ot.js';
 import odRouter from './routes/od.js';
 import punchMissedRouter from './routes/punchMissed.js';
+import payrollRouter from './routes/payroll.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -74,6 +75,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/ot', otRouter);
 app.use('/api/od', odRouter);
 app.use('/api/punch-missed', punchMissedRouter);
+app.use('/api/payroll', payrollRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
