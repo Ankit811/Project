@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
-const Attendance = require('../models/Attendance');
-const RawPunchlog = require('../models/RawPunchlog');
-const Leave = require('../models/Leave');
-const Employee = require('../models/Employee');
+import mongoose from 'mongoose';
+import Attendance from '../models/Attendance.js';
+import RawPunchlog from '../models/RawPunchlog.js';
+import Leave from '../models/Leave.js';
+import Employee from '../models/Employee.js';
 
 async function processLateArrivalsAndAbsents() {
   try {
@@ -266,4 +266,4 @@ async function processLateArrivalsAndAbsents() {
   }
 }
 
-module.exports = { processLateArrivalsAndAbsents };
+export { processLateArrivalsAndAbsents };

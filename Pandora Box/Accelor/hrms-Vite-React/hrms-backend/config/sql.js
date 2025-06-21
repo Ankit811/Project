@@ -1,4 +1,4 @@
-const sql = require('mssql');
+import sql from 'mssql';
 
 const sqlConfig = {
   user: process.env.SQL_USER || 'essl',
@@ -37,4 +37,4 @@ const connectSQL = async () => {
   }
 };
 
-module.exports = { connectSQL, sql };
+export { connectSQL, sql };

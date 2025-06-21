@@ -1,8 +1,8 @@
-const Employee = require('../models/Employee');
-const Attendance = require('../models/Attendance');
-const Leave = require('../models/Leave');
-const OD = require('../models/OD');
-const Notification = require('../models/Notification');
+import Employee from '../models/Employee.js';
+import Attendance from '../models/Attendance.js';
+import Leave from '../models/Leave.js';
+import OD from '../models/OD.js';
+import Notification from '../models/Notification.js';
 
 const checkAbsences = async () => {
   try {
@@ -91,6 +91,7 @@ const checkAbsences = async () => {
         await Notification.create({
           userId: admin.employeeId,
           message: `Employee ${employee.employeeId} has been absent without prior leave for 3 consecutive days. Review in attendance list to send warning.`,
+          alertType: 'warning',
         });
         if (global._io) {
           global._io.to(admin.employeeId).emit('notification', {
@@ -101,6 +102,7 @@ const checkAbsences = async () => {
         await Notification.create({
           userId: admin.employeeId,
           message: `Employee ${employee.employeeId} has been absent without prior leave for 5 consecutive days. Review in attendance list to send termination notice.`,
+          alertType: 'termination',
         });
         if (global._io) {
           global._io.to(admin.employeeId).emit('notification', {
@@ -115,4 +117,4 @@ const checkAbsences = async () => {
   }
 };
 
-module.exports = { checkAbsences };
+export { checkAbsences };

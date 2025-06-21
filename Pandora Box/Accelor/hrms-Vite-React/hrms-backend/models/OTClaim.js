@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const otClaimSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
@@ -17,4 +17,4 @@ const otClaimSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-module.exports = mongoose.model('OTClaim', otClaimSchema);
+export default mongoose.model('OTClaim', otClaimSchema);

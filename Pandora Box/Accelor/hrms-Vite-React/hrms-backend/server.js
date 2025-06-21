@@ -1,15 +1,15 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const cron = require('node-cron');
-const { gfsReady } = require('./utils/gridfs');
-const { syncAttendance } = require('./utils/syncAttendance');
-const { processLateArrivalsAndAbsents } = require('./utils/processAttendance');
-const { processUnclaimedOT } = require('./utils/processUnclaimedOT');
-const { checkAbsences } = require('./utils/absenceCron');
+import express from 'express';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import http from 'http';
+import { Server } from 'socket.io';
+import cron from 'node-cron';
+import { gfsReady } from './utils/gridfs.js';
+import { syncAttendance } from './utils/syncAttendance.js';
+import { processLateArrivalsAndAbsents } from './utils/processAttendance.js';
+import { processUnclaimedOT } from './utils/processUnclaimedOT.js';
+import { checkAbsences } from './utils/absenceCron.js';
 
 dotenv.config();
 
@@ -17,8 +17,10 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
+  'http://192.168.1.20:5001',
   'http://localhost:5174',
   'http://localhost:3000',
+  'http://192.168.59.225:5001',
 ];
 
 app.use(cors({
@@ -51,16 +53,16 @@ const io = new Server(server, {
 
 global._io = io;
 
-const authRoutes = require('./routes/auth');
-const dashboardRoutes = require('./routes/dashboard');
-const employeeRoutes = require('./routes/employees');
-const departmentRoutes = require('./routes/departments');
-const attendanceRoutes = require('./routes/attendance');
-const leaveRoutes = require('./routes/leaves');
-const notificationRoutes = require('./routes/notifications');
-const otRouter = require('./routes/ot');
-const odRouter = require('./routes/od');
-const punchMissedRouter = require('./routes/punchMissed');
+import authRoutes from './routes/auth.js';
+import dashboardRoutes from './routes/dashboard.js';
+import employeeRoutes from './routes/employees.js';
+import departmentRoutes from './routes/departments.js';
+import attendanceRoutes from './routes/attendance.js';
+import leaveRoutes from './routes/leaves.js';
+import notificationRoutes from './routes/notifications.js';
+import otRouter from './routes/ot.js';
+import odRouter from './routes/od.js';
+import punchMissedRouter from './routes/punchMissed.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);

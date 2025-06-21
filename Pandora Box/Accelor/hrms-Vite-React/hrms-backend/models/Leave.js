@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const leaveSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
@@ -52,4 +52,4 @@ const leaveSchema = new mongoose.Schema({
   remarks: { type: String, default: 'N/A' }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Leave', leaveSchema);
+export default mongoose.model('Leave', leaveSchema);

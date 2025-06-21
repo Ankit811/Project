@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const auditSchema = new mongoose.Schema({
   user: { type: String, required: true }, // Changed from userId to user to match employees.js
@@ -7,4 +7,6 @@ const auditSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Check if model is already compiled to prevent redefinition
-module.exports = mongoose.models.Audit || mongoose.model('Audit', auditSchema);
+const Audit = mongoose.models.Audit || mongoose.model('Audit', auditSchema);
+
+export default Audit;

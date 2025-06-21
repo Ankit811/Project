@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const Employee = require('../models/Employee');
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import Employee from './Employee.js';
 
 async function hashExistingPasswords() {
   try {
@@ -32,4 +32,4 @@ async function hashExistingPasswords() {
   }
 }
 
-hashExistingPasswords();
+hashExistingPasswords().catch(console.error);

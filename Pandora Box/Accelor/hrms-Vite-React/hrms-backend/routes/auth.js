@@ -1,8 +1,8 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const Employee = require('../models/Employee');
-const rateLimit = require('express-rate-limit');
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import Employee from '../models/Employee.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
@@ -99,4 +99,4 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

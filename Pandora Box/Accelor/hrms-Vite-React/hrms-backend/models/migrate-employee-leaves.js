@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const Employee = require('../models/Employee');
+import mongoose from 'mongoose';
+import Employee from './Employee.js';
 
 async function migrate() {
   try {
@@ -53,4 +53,4 @@ async function migrate() {
   }
 }
 
-migrate();
+migrate().catch(console.error);

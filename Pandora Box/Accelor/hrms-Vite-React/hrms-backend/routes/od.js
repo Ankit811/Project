@@ -1,11 +1,11 @@
-const express = require('express');
-const OD = require('../models/OD');
-const Employee = require('../models/Employee');
-const Notification = require('../models/Notification');
-const Audit = require('../models/Audit');
-const auth = require('../middleware/auth');
-const role = require('../middleware/role');
-const Department = require('../models/Department');
+import express from 'express';
+import OD from '../models/OD.js';
+import Employee from '../models/Employee.js';
+import Notification from '../models/Notification.js';
+import Audit from '../models/Audit.js';
+import auth from '../middleware/auth.js';
+import role from '../middleware/role.js';
+import Department from '../models/Department.js';
 const router = express.Router();
 
 // Submit OD
@@ -235,4 +235,4 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
   }
 });
 
-module.exports = router;
+export default router;

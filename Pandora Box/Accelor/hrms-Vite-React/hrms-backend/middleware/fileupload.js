@@ -1,7 +1,7 @@
 // middleware/fileupload.js
-const multer = require('multer');
-const { Readable } = require('stream');
-const { getGfs, gfsReady } = require('../utils/gridfs');
+import multer from 'multer';
+import { Readable } from 'stream';
+import { getGfs, gfsReady } from '../utils/gridfs.js';
 
 const storage = multer.memoryStorage();
 
@@ -51,8 +51,4 @@ const uploadToGridFS = (file, metadata = {}) => {
   });
 };
 
-module.exports = {
-  upload,
-  uploadToGridFS,
-  gfsReady,
-};
+export { upload, uploadToGridFS, gfsReady };

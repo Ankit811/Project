@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const odSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
@@ -19,4 +19,6 @@ const odSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.models.OD || mongoose.model('OD', odSchema);
+const OD = mongoose.models.OD || mongoose.model('OD', odSchema);
+
+export default OD;

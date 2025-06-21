@@ -1,14 +1,15 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const Employee = require('../models/Employee');
-const Attendance = require('../models/Attendance');
-const Leave = require('../models/Leave');
-const OT = require('../models/OTClaim');
-const OD = require('../models/OD');
-const Department = require('../models/Department');
-const PunchMissed = require('../models/PunchMissed');
-const auth = require('../middleware/auth');
-const role = require('../middleware/role');
+import express from 'express';
+import mongoose from 'mongoose';
+import Employee from '../models/Employee.js';
+import Attendance from '../models/Attendance.js';
+import Leave from '../models/Leave.js';
+import OT from '../models/OTClaim.js';
+import OD from '../models/OD.js';
+import Department from '../models/Department.js';
+import PunchMissed from '../models/PunchMissed.js';
+import auth from '../middleware/auth.js';
+import role from '../middleware/role.js';
+import { buildAttendanceData } from '../utils/attendanceUtils.js';
 const router = express.Router();
 
 // Get dashboard statistics
@@ -65,9 +66,11 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       Probation: 0,
       Contractual: 0,
       Intern: 0,
+      OJT: 0,
+      Apprentice: 0,
     };
     employeeStats.forEach(stat => {
-      if (stat._id && ['Confirmed', 'Probation', 'Contractual', 'Intern'].includes(stat._id)) {
+      if (stat._id && ['Confirmed', 'Probation', 'Contractual', 'Intern', 'OJT', 'Apprentice'].includes(stat._id)) {
         employeeCounts[stat._id] = stat.count;
       }
     });
@@ -177,6 +180,8 @@ router.get('/stats', auth, role(['Admin', 'CEO', 'HOD']), async (req, res) => {
       probationEmployees: employeeCounts.Probation,
       contractualEmployees: employeeCounts.Contractual,
       internEmployees: employeeCounts.Intern,
+      ojtEmployees: employeeCounts.OJT,
+      apprenticeEmployees: employeeCounts.Apprentice,
       presentToday,
       pendingLeaves: pendingApprovals,
     };
@@ -214,7 +219,7 @@ router.get('/employee-info', auth, role(['Employee', 'HOD', 'Admin']), async (re
       compensatoryLeaves: employee.compensatoryLeaves,
       department: employee.department,
       designation: employee.designation,
-      canApplyEmergencyLeave:employee.canApplyEmergencyLeave
+      canApplyEmergencyLeave:employee.canApplyEmergencyLeave,
     });
   } catch (err) {
     console.error('Error fetching employee info:', err);
@@ -251,31 +256,7 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
     };
     const attendanceRecords = await Attendance.find(attendanceQuery);
 
-    let attendanceData = [];
-    if (attendanceView === 'daily') {
-      const date = new Date(fromDate);
-      const count = attendanceRecords.filter(
-        a => new Date(a.logDate).toDateString() === date.toDateString()
-      ).length;
-      attendanceData = [{ name: date.toLocaleDateString(), count }];
-    } else if (attendanceView === 'monthly') {
-      attendanceData = Array.from({ length: endOfMonth.getDate() }, (_, i) => {
-        const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
-        const count = attendanceRecords.filter(
-          a => new Date(a.logDate).toDateString() === date.toDateString()
-        ).length;
-        return { name: `${i + 1}`, count };
-      });
-    } else {
-      attendanceData = Array.from({ length: 12 }, (_, i) => {
-        const month = new Date(today.getFullYear(), i, 1);
-        const count = attendanceRecords.filter(
-          a => new Date(a.logDate).getMonth() === i &&
-              new Date(a.logDate).getFullYear() === today.getFullYear()
-        ).length;
-        return { name: month.toLocaleString('default', { month: 'short' }), count };
-      });
-    }
+    const attendanceData = buildAttendanceData(attendanceRecords, attendanceView, new Date(fromDate), new Date(toDate));
 
     const employee = await Employee.findOne({ employeeId })
       .select('employeeType department compensatoryAvailable designation')
@@ -509,4 +490,4 @@ router.get('/employee-stats', auth, role(['Employee', 'HOD', 'Admin']), async (r
   }
 });
 
-module.exports = router;
+export default router;

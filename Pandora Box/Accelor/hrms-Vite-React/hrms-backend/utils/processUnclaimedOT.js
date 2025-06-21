@@ -1,7 +1,7 @@
-const Attendance = require('../models/Attendance');
-const Employee = require('../models/Employee');
-const OTClaim = require('../models/OTClaim');
-const Department = require('../models/Department');
+import Attendance from '../models/Attendance.js';
+import Employee from '../models/Employee.js';
+import OTClaim from '../models/OTClaim.js';
+import Department from '../models/Department.js';
 
 async function processUnclaimedOT() {
   try {
@@ -96,4 +96,4 @@ async function processUnclaimedOT() {
   }
 }
 
-module.exports = { processUnclaimedOT };
+export { processUnclaimedOT };

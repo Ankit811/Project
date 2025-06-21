@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const punchMissedSchema = new mongoose.Schema({
   employeeId: { type: String, required: true },
@@ -15,4 +15,4 @@ const punchMissedSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-module.exports = mongoose.model('PunchMissed', punchMissedSchema);
+export default mongoose.model('PunchMissed', punchMissedSchema);

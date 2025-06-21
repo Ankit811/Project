@@ -1,6 +1,6 @@
-const express = require('express');
-const Notification = require('../models/Notification');
-const auth = require('../middleware/auth');
+import express from 'express';
+import Notification from '../models/Notification.js';
+import auth from '../middleware/auth.js';
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
@@ -26,4 +26,4 @@ router.put('/:id/read', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

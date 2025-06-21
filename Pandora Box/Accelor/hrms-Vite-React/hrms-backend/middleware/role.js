@@ -18,4 +18,4 @@ const role = (roles) => (req, res, next) => {
   next();
 };
 
-module.exports = role;
+export default role;

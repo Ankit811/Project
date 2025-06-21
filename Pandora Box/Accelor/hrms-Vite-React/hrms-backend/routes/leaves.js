@@ -1,13 +1,13 @@
-const express = require('express');
-const Leave = require('../models/Leave');
-const Employee = require('../models/Employee');
-const Notification = require('../models/Notification');
-const Audit = require('../models/Audit');
-const auth = require('../middleware/auth');
-const role = require('../middleware/role');
-const Department = require('../models/Department');
-const { upload, uploadToGridFS, gfsReady } = require('../middleware/fileupload');
-const { getGfs } = require('../utils/gridfs');
+import express from 'express';
+import Leave from '../models/Leave.js';
+import Employee from '../models/Employee.js';
+import Notification from '../models/Notification.js';
+import Audit from '../models/Audit.js';
+import auth from '../middleware/auth.js';
+import role from '../middleware/role.js';
+import Department from '../models/Department.js';
+import { upload, uploadToGridFS, gfsReady } from '../middleware/fileupload.js';
+import { getGfs } from '../utils/gridfs.js';
 const router = express.Router();
 
 // Submit Leave
@@ -652,4 +652,4 @@ router.put('/:id/approve', auth, role(['HOD', 'CEO', 'Admin']), async (req, res)
   }
 });
 
-module.exports = router;
+export default router;

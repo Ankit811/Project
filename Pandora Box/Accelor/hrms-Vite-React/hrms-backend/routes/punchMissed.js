@@ -1,10 +1,10 @@
-const express = require('express');
-const PunchMissed = require('../models/PunchMissed');
-const Employee = require('../models/Employee');
-const Attendance = require('../models/Attendance');
-const Notification = require('../models/Notification');
-const auth = require('../middleware/auth');
-const role = require('../middleware/role');
+import express from 'express';
+import PunchMissed from '../models/PunchMissed.js';
+import Employee from '../models/Employee.js';
+import Attendance from '../models/Attendance.js';
+import Notification from '../models/Notification.js';
+import auth from '../middleware/auth.js';
+import role from '../middleware/role.js';
 const router = express.Router();
 
 router.get('/check-limit', auth, role(['Employee', 'HOD', 'Admin']), async (req, res) => {
@@ -321,4 +321,4 @@ router.put('/:id/approve', auth, role(['HOD', 'Admin', 'CEO']), async (req, res)
   }
 });
 
-module.exports = router;
+export default router;

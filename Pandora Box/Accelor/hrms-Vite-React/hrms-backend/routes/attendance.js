@@ -1,13 +1,13 @@
-const express = require('express');
-const Attendance = require('../models/Attendance');
-const Employee = require('../models/Employee');
-const Leave = require('../models/Leave');
-const OD = require('../models/OD');
-const Department = require('../models/Department');
-const Notification = require('../models/Notification');
-const auth = require('../middleware/auth');
-const role = require('../middleware/role');
-const XLSX = require('xlsx');
+import express from 'express';
+import Attendance from '../models/Attendance.js';
+import Employee from '../models/Employee.js';
+import Leave from '../models/Leave.js';
+import OD from '../models/OD.js';
+import Department from '../models/Department.js';
+import Notification from '../models/Notification.js';
+import auth from '../middleware/auth.js';
+import role from '../middleware/role.js';
+import XLSX from 'xlsx';
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
@@ -77,9 +77,39 @@ router.get('/', auth, async (req, res) => {
     if (req.query.status && req.query.status !== 'all') {
       filter.status = req.query.status;
     }
+    console.log('Final filter being used:', JSON.stringify(filter, null, 2));
+    console.log('Status filter value:', req.query.status);
+    console.log('Date range:', {
+      fromDate: req.query.fromDate,
+      toDate: req.query.toDate || req.query.fromDate
+    });
+    // Debug query to check what status values exist
+    const matchStage = {
+      logDate: { $gte: filter.logDate.$gte, $lte: filter.logDate.$lte }
+    };
 
+    // Handle both string and array employeeId cases
+    if (filter.employeeId?.$in) {
+      matchStage.employeeId = { $in: filter.employeeId.$in };
+    } else if (filter.employeeId) {
+      matchStage.employeeId = filter.employeeId;
+    }
+
+    const statusCounts = await Attendance.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          dates: { $push: { date: "$logDate", employeeId: "$employeeId" } }
+        }
+      }
+    ]);
+    
+ 
     const attendance = await Attendance.find(filter).lean();
 
+    
     // Log duplicates for debugging
     const keyCounts = {};
     attendance.forEach((record) => {
@@ -175,7 +205,19 @@ router.get('/absence-alerts', auth, role(['Admin']), async (req, res) => {
         lastDate = currentDate;
       }
 
-      if (consecutiveDays === 3 || consecutiveDays === 5) {
+      // Check if a warning notification was already sent for 3-day absence
+      const warningSent = consecutiveDays >= 3 ? await Notification.findOne({
+        userId: employee.employeeId,
+        alertType: 'warning',
+        createdAt: { $gte: fiveDaysAgo },
+      }) : null;
+
+      if (consecutiveDays === 3 && !warningSent) {
+        alerts.push({
+          employeeId: employee.employeeId,
+          days: consecutiveDays,
+        });
+      } else if (consecutiveDays === 5) {
         alerts.push({
           employeeId: employee.employeeId,
           days: consecutiveDays,
@@ -206,6 +248,7 @@ router.post('/send-absence-notification', auth, role(['Admin']), async (req, res
       await Notification.create({
         userId: employee.employeeId,
         message: `Warning: You have been absent without prior leave approval for 3 consecutive days. Please contact HR immediately.`,
+        alertType: 'warning',
       });
       if (global._io) {
         global._io.to(employee.employeeId).emit('notification', {
@@ -220,14 +263,17 @@ router.post('/send-absence-notification', auth, role(['Admin']), async (req, res
         {
           userId: employee.employeeId,
           message: `Termination Notice: You have been absent without prior leave approval for 5 consecutive days. Your employment may be terminated. Please contact HR immediately.`,
+          alertType: 'termination',
         },
         ...(hod ? [{
           userId: hod.employeeId,
           message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+          alertType: 'termination',
         }] : []),
         ...(ceo ? [{
           userId: ceo.employeeId,
           message: `Termination Notice: Employee ${employee.name} (${employee.employeeId}) has been absent without prior leave approval for 5 consecutive days.`,
+          alertType: 'termination',
         }] : []),
       ]);
 
@@ -422,4 +468,4 @@ router.get('/download', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

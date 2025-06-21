@@ -1,5 +1,5 @@
 // utils/gridfs.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 let gfs = null;
 
@@ -11,4 +11,4 @@ mongoose.connection.once('open', () => {
 const gfsReady = () => !!gfs;
 const getGfs = () => gfs;
 
-module.exports = { getGfs, gfsReady };
+export { getGfs, gfsReady };
